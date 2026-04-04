@@ -1,99 +1,136 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { Plugin, TFile } from 'obsidian';
+import { AgentSettings, AgentSettingTab, DEFAULT_SETTINGS } from './settings';
+import { ChatView, CHAT_VIEW_TYPE } from './ui/ChatView';
+import { VaultManager } from './vault/VaultManager';
+import { FrontmatterParser } from './vault/FrontmatterParser';
+import { TaxonomyManager } from './vault/TaxonomyManager';
+import { MemoryManager } from './memory/MemoryManager';
+import { ContextAssembler } from './context/ContextAssembler';
+import { SessionManager } from './session/SessionManager';
+import { SetupWizard } from './wizard/SetupWizard';
+import type { MemoryItemFrontmatter } from './types';
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class MinimalAgentPlugin extends Plugin {
+	settings: AgentSettings;
+	vaultManager: VaultManager;
+	parser: FrontmatterParser;
+	taxonomyManager: TaxonomyManager;
+	memoryManager: MemoryManager;
+	contextAssembler: ContextAssembler;
+	sessionManager: SessionManager;
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
+		this.vaultManager = new VaultManager(this.app);
+		this.parser = new FrontmatterParser();
+		this.taxonomyManager = new TaxonomyManager(this.vaultManager, this.parser);
+		this.memoryManager = new MemoryManager(this.vaultManager, this.parser);
+		this.contextAssembler = new ContextAssembler(this.vaultManager, this.parser, this.memoryManager);
+		this.sessionManager = new SessionManager(
+			this.vaultManager,
+			this.parser,
+			this.taxonomyManager,
+			() => this.settings.apiKey,
+			() => this.settings.modelSlug,
+		);
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
+		this.registerView(CHAT_VIEW_TYPE, (leaf) => new ChatView(leaf, this));
 
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
+			id: 'open-agent-chat',
+			name: 'Open agent chat',
+			callback: () => this.openChatView(),
+		});
+
+		this.addRibbonIcon('message-square', 'Open agent chat', () => this.openChatView());
+
+		this.addSettingTab(new AgentSettingTab(this.app, this));
+
+		this.registerVaultHooks();
+
+		this.app.workspace.onLayoutReady(() => {
+			if (SetupWizard.isFirstRun(this.app)) {
+				new SetupWizard(this.app, this, this.vaultManager).open();
 			}
+			void this.memoryManager.autoMarkStale();
+			void this.cleanupTraces();
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-
 	}
 
-	onunload() {
-	}
+	onunload() {}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<AgentSettings>);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-}
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+	private openChatView() {
+		const leaf = this.app.workspace.getRightLeaf(false);
+		if (leaf) {
+			leaf.setViewState({ type: CHAT_VIEW_TYPE, active: true });
+			this.app.workspace.revealLeaf(leaf);
+		}
 	}
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
+	// — Vault hooks —
+
+	private registerVaultHooks() {
+		// Candidate confirmed: user moved file out of _pending/
+		this.registerEvent(
+			this.app.vault.on('rename', (file, oldPath) => {
+				if (!oldPath.includes('memory/items/_pending/')) return;
+				if (!(file instanceof TFile)) return;
+
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter as Partial<MemoryItemFrontmatter> | undefined;
+				if (!fm) return;
+
+				this.memoryManager.confirmItem(file.path, fm as MemoryItemFrontmatter);
+
+				const proposedTags = fm.proposed_tags;
+				if (Array.isArray(proposedTags) && proposedTags.length > 0) {
+					void this.taxonomyManager.addToActive(proposedTags);
+				}
+			}),
+		);
+
+		// Candidate discarded: user deleted file from _pending/
+		this.registerEvent(
+			this.app.vault.on('delete', (file) => {
+				if (!file.path.includes('memory/items/_pending/')) return;
+				const ts = new Date().toISOString().slice(0, 16).replace(':', '-');
+				const tracePath = `_system/traces/${ts}-discard.md`;
+				void this.vaultManager.writeFile(tracePath, `Discarded: ${file.path}\n`);
+			}),
+		);
+
+		// Confirmed item edited: invalidate score cache
+		this.registerEvent(
+			this.app.vault.on('modify', (file) => {
+				if (!(file instanceof TFile)) return;
+				if (!file.path.includes('memory/items/')) return;
+				if (file.path.includes('_pending/')) return;
+				this.memoryManager.reindex(file.path);
+			}),
+		);
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	// — Trace retention cleanup —
+
+	private async cleanupTraces(): Promise<void> {
+		const files = this.vaultManager.listFiles('_system/traces');
+		const cutoff = Date.now() - this.settings.traceRetentionDays * 24 * 60 * 60 * 1000;
+
+		for (const filePath of files) {
+			const file = this.app.vault.getAbstractFileByPath(filePath);
+			if (!(file instanceof TFile)) continue;
+			if (file.stat.mtime < cutoff) {
+				await this.app.vault.delete(file);
+			}
+		}
 	}
 }

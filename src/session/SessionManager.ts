@@ -1,0 +1,252 @@
+import { Notice } from 'obsidian';
+import type { VaultManager } from '../vault/VaultManager';
+import type { FrontmatterParser } from '../vault/FrontmatterParser';
+import type { TaxonomyManager } from '../vault/TaxonomyManager';
+import { MemoryExtractor } from '../memory/MemoryExtractor';
+import type { ChatMessage, MemoryItemCandidate } from '../types';
+import { countTokens } from '../utils/tokens';
+
+export class SessionManager {
+	private extractor = new MemoryExtractor();
+
+	constructor(
+		private vaultManager: VaultManager,
+		private parser: FrontmatterParser,
+		private taxonomyManager: TaxonomyManager,
+		private getApiKey: () => string,
+		private getModelSlug: () => string,
+	) {}
+
+	async finalizeSession(transcript: ChatMessage[]): Promise<void> {
+		if (transcript.length === 0) return;
+
+		const now = new Date();
+		const date = now.toISOString().slice(0, 10);
+		const datetime = now.toISOString().slice(0, 16);
+		const episodePath = `_agent/memory/episodes/${date}.md`;
+
+		// Determine session number
+		const sessionN = await this.getSessionNumber(episodePath);
+		const sessionId = `${date}-session-${sessionN}`;
+
+		// Extract memory candidates
+		const taxonomy = await this.taxonomyManager.getActiveTagsContent();
+		let candidates: MemoryItemCandidate[] = [];
+		try {
+			candidates = await this.extractor.extract(
+				transcript,
+				taxonomy,
+				this.getApiKey(),
+				this.getModelSlug(),
+			);
+		} catch {
+			new Notice('Memory extraction failed — session saved without candidates.');
+		}
+
+		// Write episode
+		await this.writeEpisode(episodePath, sessionId, datetime, transcript, candidates);
+
+		// Write memory candidates to _pending/
+		for (const candidate of candidates) {
+			await this.writePendingItem(candidate, sessionId, datetime);
+		}
+
+		// Write trace
+		await this.writeTrace(sessionId, datetime, candidates);
+
+		// Update active.md if any high/critical items
+		const important = candidates.filter(c => c.importance === 'high' || c.importance === 'critical');
+		if (important.length > 0) {
+			await this.updateActiveMdFromCandidates(important, datetime);
+		}
+
+		new Notice(
+			`Session saved. ${candidates.length} memory candidate${candidates.length !== 1 ? 's' : ''} written to _pending/.`,
+		);
+	}
+
+	// — Episode —
+
+	private async getSessionNumber(episodePath: string): Promise<number> {
+		const content = await this.vaultManager.readFile(episodePath);
+		if (!content) return 1;
+		const matches = content.match(/^## Sesión/gm);
+		return (matches?.length ?? 0) + 1;
+	}
+
+	private async writeEpisode(
+		episodePath: string,
+		sessionId: string,
+		datetime: string,
+		transcript: ChatMessage[],
+		candidates: MemoryItemCandidate[],
+	): Promise<void> {
+		const tokenCost = transcript.reduce((s, m) => s + countTokens(m.content), 0);
+		const firstUserMsg = transcript.find(m => m.role === 'user')?.content ?? '';
+		const intention = firstUserMsg.slice(0, 120) + (firstUserMsg.length > 120 ? '…' : '');
+
+		const decisions = candidates.filter(c => c.memory_kind === 'decision');
+		const risks = candidates.filter(c => c.memory_kind === 'risk');
+
+		const decisionLines = decisions.length > 0
+			? decisions.map(c => `- ${c.title}: ${c.what.slice(0, 80)}`).join('\n')
+			: 'ninguna';
+
+		const riskLines = risks.length > 0
+			? risks.map(c => `- ${c.title}`).join('\n')
+			: 'ninguna';
+
+		const sessionBlock = [
+			`## Sesión ${datetime.replace('T', ' ')}`,
+			'',
+			'### Qué se intentó',
+			'',
+			intention,
+			'',
+			'### Qué se produjo',
+			'',
+			`- ${Math.floor(transcript.length / 2)} intercambios`,
+			`- ${candidates.length} candidatos de memoria extraídos`,
+			'',
+			'### Decisiones tomadas',
+			'',
+			decisionLines,
+			'',
+			'### Preguntas abiertas',
+			'',
+			riskLines,
+		].join('\n');
+
+		const existingContent = await this.vaultManager.readFile(episodePath);
+
+		if (!existingContent) {
+			// Create new episode file with frontmatter
+			const fm = {
+				kind: 'memory_episode',
+				state: 'confirmed',
+				created_at: datetime,
+				updated_at: datetime,
+				origin: 'agent',
+				session_id: sessionId,
+				token_cost: tokenCost,
+			};
+			const content = this.parser.serialize(fm, sessionBlock);
+			await this.vaultManager.writeFile(episodePath, content);
+		} else {
+			// Append new session block to existing file
+			const { frontmatter, body } = this.parser.parse(existingContent);
+			const updatedFm = { ...frontmatter, updated_at: datetime, token_cost: tokenCost };
+			await this.vaultManager.writeFile(
+				episodePath,
+				this.parser.serialize(updatedFm, body.trimEnd() + '\n\n' + sessionBlock),
+			);
+		}
+	}
+
+	// — Memory items —
+
+	private async writePendingItem(
+		candidate: MemoryItemCandidate,
+		sessionId: string,
+		datetime: string,
+	): Promise<void> {
+		const filename = this.sanitizeFilename(candidate.title);
+		const path = `_agent/memory/items/_pending/${filename}.md`;
+
+		const fm: Record<string, unknown> = {
+			kind: 'memory_item',
+			state: 'draft',
+			created_at: datetime,
+			updated_at: datetime,
+			origin: 'agent',
+			memory_tier: candidate.memory_tier,
+			memory_kind: candidate.memory_kind,
+			importance: candidate.importance,
+			confidence: candidate.confidence,
+			tags: candidate.tags,
+			proposed_tags: candidate.proposed_tags,
+			related_to: [],
+			expires_at: candidate.expires_at,
+			session_id: sessionId,
+		};
+
+		const body = [
+			'## Qué ocurrió / qué se aprendió',
+			'',
+			candidate.what,
+			'',
+			'## Implicación',
+			'',
+			candidate.implication,
+			'',
+			'## Contexto de origen',
+			'',
+			`Extraído de sesión ${sessionId}.`,
+		].join('\n');
+
+		await this.vaultManager.writeFile(path, this.parser.serialize(fm, body));
+	}
+
+	// — Trace —
+
+	private async writeTrace(
+		sessionId: string,
+		datetime: string,
+		candidates: MemoryItemCandidate[],
+	): Promise<void> {
+		const filename = datetime.replace('T', 'T').replace(':', '-') + `-${sessionId}-finalize.md`;
+		const path = `_system/traces/${filename}`;
+		const content = [
+			`# Trace: ${sessionId}`,
+			'',
+			`date: ${datetime}`,
+			`candidates: ${candidates.length}`,
+			'',
+			'```json',
+			JSON.stringify(candidates, null, 2),
+			'```',
+		].join('\n');
+		await this.vaultManager.writeFile(path, content);
+	}
+
+	// — active.md update —
+
+	private async updateActiveMdFromCandidates(
+		candidates: MemoryItemCandidate[],
+		datetime: string,
+	): Promise<void> {
+		const path = '_agent/memory/active.md';
+		const content = await this.vaultManager.readFile(path);
+		if (!content) return;
+
+		const { frontmatter, body } = this.parser.parse(content);
+
+		const decisionLines = candidates
+			.map(c => `- [[memory/items/${this.sanitizeFilename(c.title)}]] — ${c.what.slice(0, 60)}`)
+			.join('\n');
+
+		const highestImportance = candidates.find(c => c.importance === 'critical') ?? candidates[0];
+		const nextStep = highestImportance
+			? `Revisar y confirmar: _pending/${this.sanitizeFilename(highestImportance.title)}.md`
+			: '';
+
+		let updatedBody = this.parser.updateSection(body, 'Decisiones recientes', decisionLines);
+		if (nextStep) {
+			updatedBody = this.parser.updateSection(updatedBody, 'Siguiente paso', nextStep);
+		}
+
+		const updatedFm = { ...frontmatter, updated_at: datetime };
+		await this.vaultManager.writeFile(path, this.parser.serialize(updatedFm, updatedBody));
+	}
+
+	// — Helpers —
+
+	private sanitizeFilename(slug: string): string {
+		return slug
+			.toLowerCase()
+			.replace(/[^a-z0-9-]/g, '-')
+			.replace(/-+/g, '-')
+			.replace(/^-|-$/g, '');
+	}
+}
+
