@@ -3,6 +3,7 @@ import type MinimalAgentPlugin from './main';
 import type { Importance } from './types';
 
 export interface AgentSettings {
+	agentName: string;
 	apiKey: string;
 	modelSlug: string;
 	contextTokenBudget: number;
@@ -15,6 +16,7 @@ export interface AgentSettings {
 }
 
 export const DEFAULT_SETTINGS: AgentSettings = {
+	agentName: 'Agent',
 	apiKey: '',
 	modelSlug: 'openai/gpt-4o',
 	contextTokenBudget: 8000,
@@ -37,6 +39,20 @@ export class AgentSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+
+		// — Agent —
+		containerEl.createEl('h3', { text: 'Agent' });
+
+		new Setting(containerEl)
+			.setName('Agent name')
+			.setDesc('Name displayed in the chat panel and loading indicator.')
+			.addText(text => text
+				.setPlaceholder('Agent')
+				.setValue(this.plugin.settings.agentName)
+				.onChange(async (value) => {
+					this.plugin.settings.agentName = value.trim() || 'Agent';
+					await this.plugin.saveSettings();
+				}));
 
 		// — API —
 		containerEl.createEl('h3', { text: 'API' });

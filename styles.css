@@ -124,6 +124,13 @@
 	cursor: default;
 }
 
+/* ─── Loading bubble ─────────────────────────────────────────────────────── */
+
+.agent-message-loading {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
 /* ─── Status line ─────────────────────────────────────────────────────────── */
 
 .agent-chat-status {
@@ -131,6 +138,16 @@
 	color: var(--text-faint);
 	text-align: right;
 	min-height: 1em;
+}
+
+/* ─── File explorer lock icons ────────────────────────────────────────────── */
+
+.agent-lock-icon {
+	margin-right: 4px;
+	font-size: 0.75em;
+	opacity: 0.6;
+	cursor: help;
+	flex-shrink: 0;
 }
 
 /* ─── Setup wizard ────────────────────────────────────────────────────────── */

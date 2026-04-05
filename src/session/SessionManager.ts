@@ -21,13 +21,11 @@ export class SessionManager {
 		if (transcript.length === 0) return;
 
 		const now = new Date();
-		const date = now.toISOString().slice(0, 10);
-		const datetime = now.toISOString().slice(0, 16);
-		const episodePath = `_agent/memory/episodes/${date}.md`;
-
-		// Determine session number
-		const sessionN = await this.getSessionNumber(episodePath);
-		const sessionId = `${date}-session-${sessionN}`;
+		const isoDatetime = now.toISOString().slice(0, 16); // 2024-01-15T14:30
+		const filenameDatetime = isoDatetime.replace('T', '-').replace(':', '-'); // 2024-01-15-14-30
+		const datetime = isoDatetime;
+		const episodePath = `_agent/memory/episodes/${filenameDatetime}.md`;
+		const sessionId = filenameDatetime;
 
 		// Extract memory candidates
 		const taxonomy = await this.taxonomyManager.getActiveTagsContent();
@@ -66,13 +64,6 @@ export class SessionManager {
 	}
 
 	// — Episode —
-
-	private async getSessionNumber(episodePath: string): Promise<number> {
-		const content = await this.vaultManager.readFile(episodePath);
-		if (!content) return 1;
-		const matches = content.match(/^## Sesión/gm);
-		return (matches?.length ?? 0) + 1;
-	}
 
 	private async writeEpisode(
 		episodePath: string,
@@ -117,30 +108,16 @@ export class SessionManager {
 			riskLines,
 		].join('\n');
 
-		const existingContent = await this.vaultManager.readFile(episodePath);
-
-		if (!existingContent) {
-			// Create new episode file with frontmatter
-			const fm = {
-				kind: 'memory_episode',
-				state: 'confirmed',
-				created_at: datetime,
-				updated_at: datetime,
-				origin: 'agent',
-				session_id: sessionId,
-				token_cost: tokenCost,
-			};
-			const content = this.parser.serialize(fm, sessionBlock);
-			await this.vaultManager.writeFile(episodePath, content);
-		} else {
-			// Append new session block to existing file
-			const { frontmatter, body } = this.parser.parse(existingContent);
-			const updatedFm = { ...frontmatter, updated_at: datetime, token_cost: tokenCost };
-			await this.vaultManager.writeFile(
-				episodePath,
-				this.parser.serialize(updatedFm, body.trimEnd() + '\n\n' + sessionBlock),
-			);
-		}
+		const fm = {
+			kind: 'memory_episode',
+			state: 'confirmed',
+			created_at: datetime,
+			updated_at: datetime,
+			origin: 'agent',
+			session_id: sessionId,
+			token_cost: tokenCost,
+		};
+		await this.vaultManager.writeFile(episodePath, this.parser.serialize(fm, sessionBlock));
 	}
 
 	// — Memory items —

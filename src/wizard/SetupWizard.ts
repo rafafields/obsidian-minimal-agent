@@ -1,20 +1,23 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
 import type MinimalAgentPlugin from '../main';
 import type { VaultManager } from '../vault/VaultManager';
+import { OpenRouterClient } from '../llm/OpenRouterClient';
+import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK } from './soulInstructions';
 
 const SUGGESTED_TAGS = [
-	'#topic/trabajo',
+	'#topic/work',
 	'#topic/personal',
-	'#topic/aprendizaje',
-	'#topic/proyectos',
-	'#topic/salud',
-	'#topic/finanzas',
-	'#topic/relaciones',
-	'#topic/creatividad',
+	'#topic/learning',
+	'#topic/projects',
+	'#topic/health',
+	'#topic/finance',
+	'#topic/relationships',
+	'#topic/creativity',
 ];
 
 export class SetupWizard extends Modal {
 	private step = 1;
+	private agentName: string;
 	private apiKey: string;
 	private modelSlug: string;
 	private corePurpose = '';
@@ -31,6 +34,7 @@ export class SetupWizard extends Modal {
 		private vaultManager: VaultManager,
 	) {
 		super(app);
+		this.agentName = plugin.settings.agentName;
 		this.apiKey = plugin.settings.apiKey;
 		this.modelSlug = plugin.settings.modelSlug;
 		this.selectedTags = new Set(SUGGESTED_TAGS);
@@ -93,7 +97,7 @@ export class SetupWizard extends Modal {
 				.setValue(this.modelSlug)
 				.onChange(v => { this.modelSlug = v.trim(); }));
 
-		this.renderNav(null, () => {
+		this.renderNav(null, (_btn) => {
 			if (!this.apiKey) {
 				new Notice('API key is required to continue.');
 				return;
@@ -110,6 +114,14 @@ export class SetupWizard extends Modal {
 			text: 'These fields generate _agent/soul.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
 			cls: 'agent-wizard-desc',
 		});
+
+		new Setting(contentEl)
+			.setName('Agent name')
+			.setDesc('How the agent will be identified in the chat and interface.')
+			.addText(text => text
+				.setPlaceholder('Agent')
+				.setValue(this.agentName)
+				.onChange(v => { this.agentName = v.trim(); }));
 
 		new Setting(contentEl)
 			.setName('Core purpose')
@@ -143,7 +155,7 @@ export class SetupWizard extends Modal {
 
 		this.renderNav(
 			() => { this.step = 1; this.render(); },
-			() => { this.step = 3; this.render(); },
+			(_btn) => { this.step = 3; this.render(); },
 		);
 	}
 
@@ -187,7 +199,7 @@ export class SetupWizard extends Modal {
 
 		this.renderNav(
 			() => { this.step = 2; this.render(); },
-			() => { this.step = 4; this.render(); },
+			(_btn) => { this.step = 4; this.render(); },
 		);
 	}
 
@@ -212,14 +224,14 @@ export class SetupWizard extends Modal {
 
 		this.renderNav(
 			() => { this.step = 3; this.render(); },
-			() => { void this.finish(); },
+			(btn) => { void this.finish(btn); },
 			'Finish',
 		);
 	}
 
 	private renderNav(
 		onBack: (() => void) | null,
-		onNext: (() => void) | null,
+		onNext: ((btn: HTMLButtonElement) => void) | null,
 		nextLabel = 'Next',
 	) {
 		const navEl = this.contentEl.createDiv({ cls: 'agent-wizard-nav' });
@@ -234,17 +246,68 @@ export class SetupWizard extends Modal {
 				text: nextLabel,
 				cls: 'mod-cta',
 			});
-			nextBtn.addEventListener('click', onNext);
+			nextBtn.addEventListener('click', () => onNext(nextBtn));
 		}
 	}
 
-	private async finish() {
+	// — Soul generation —
+
+	private async generateSoul(): Promise<string> {
+		const client = new OpenRouterClient(
+			this.apiKey,
+			this.modelSlug || 'openai/gpt-4o',
+		);
+
+		const userMessage = [
+			`Agent name: ${this.agentName || 'Agent'}`,
+			'',
+			`Core purpose: ${this.corePurpose}`,
+			'',
+			`Core values: ${this.coreValues}`,
+			'',
+			`Voice and tone: ${this.voiceTone}`,
+		].join('\n');
+
+		return await client.chat([
+			{ role: 'system', content: SOUL_GENERATION_PROMPT },
+			{ role: 'user', content: userMessage },
+		], { temperature: 0.7 });
+	}
+
+	// — Finish —
+
+	private async finish(finishBtn: HTMLButtonElement): Promise<void> {
+		const formHasContent = !!(
+			this.corePurpose.trim() ||
+			this.coreValues.trim() ||
+			this.voiceTone.trim()
+		);
+
+		let soulBody: string;
+
+		if (!formHasContent) {
+			soulBody = SOUL_FALLBACK;
+		} else {
+			finishBtn.disabled = true;
+			finishBtn.textContent = 'Generating soul…';
+			try {
+				soulBody = await this.generateSoul();
+			} catch {
+				new Notice('Soul generation failed — using default soul instead.');
+				soulBody = SOUL_FALLBACK;
+			} finally {
+				finishBtn.disabled = false;
+				finishBtn.textContent = 'Finish';
+			}
+		}
+
 		try {
 			const now = new Date();
 			const date = now.toISOString().slice(0, 10);
-			const datetime = now.toISOString().slice(0, 16).replace('T', 'T');
+			const datetime = now.toISOString().slice(0, 16);
 
-			// Save API settings
+			// Save settings
+			this.plugin.settings.agentName = this.agentName || 'Agent';
 			this.plugin.settings.apiKey = this.apiKey;
 			this.plugin.settings.modelSlug = this.modelSlug || 'openai/gpt-4o';
 			await this.plugin.saveSettings();
@@ -254,35 +317,18 @@ export class SetupWizard extends Modal {
 			await this.vaultManager.ensurePath('_agent/memory/items/_pending');
 			await this.vaultManager.ensurePath('_system/traces');
 
-			// soul.md
+			// soul.md — LLM-generated body or fallback
 			await this.vaultManager.writeFile('_agent/soul.md', [
 				'---',
 				'kind: agent_soul',
 				'state: active',
+				`agent_name: "${this.agentName || 'Agent'}"`,
 				`created_at: ${date}`,
 				`updated_at: ${date}`,
 				'origin: hybrid',
 				'---',
 				'',
-				'## Core purpose',
-				'',
-				this.corePurpose || 'To be defined.',
-				'',
-				'## Core values',
-				'',
-				this.coreValues || 'To be defined.',
-				'',
-				'## Conflicting priorities',
-				'',
-				'## Epistemic stance',
-				'',
-				'## Relationship with the user',
-				'',
-				'## What this agent never does',
-				'',
-				'## Voice and tone',
-				'',
-				this.voiceTone || 'To be defined.',
+				soulBody,
 			].join('\n'));
 
 			// user.md

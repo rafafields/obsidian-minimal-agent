@@ -17,6 +17,7 @@ export class ChatView extends ItemView {
 	private sendBtn!: HTMLButtonElement;
 	private finalizeBtn!: HTMLButtonElement;
 	private statusEl!: HTMLElement;
+	private loadingEl: HTMLElement | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -26,7 +27,7 @@ export class ChatView extends ItemView {
 	}
 
 	getViewType(): string { return CHAT_VIEW_TYPE; }
-	getDisplayText(): string { return 'Agent'; }
+	getDisplayText(): string { return this.plugin.settings.agentName || 'Agent'; }
 	getIcon(): string { return 'message-square'; }
 
 	async onOpen(): Promise<void> {
@@ -82,6 +83,7 @@ export class ChatView extends ItemView {
 		this.setProcessing(true);
 		this.appendMessage('user', userText);
 		this.transcript.push({ role: 'user', content: userText });
+		this.showLoadingBubble();
 
 		try {
 			const result = await this.plugin.contextAssembler.assemble({
@@ -110,6 +112,7 @@ export class ChatView extends ItemView {
 			);
 			const response = await client.chat(messages);
 
+			this.removeLoadingBubble();
 			this.transcript.push({ role: 'assistant', content: response });
 			this.appendMessage('agent', response);
 
@@ -117,6 +120,7 @@ export class ChatView extends ItemView {
 			this.resetIdleTimer();
 
 		} catch (e) {
+			this.removeLoadingBubble();
 			const msg = e instanceof LLMError ? e.message : String(e);
 			new Notice(`Agent error: ${msg}`);
 			this.transcript.pop(); // remove failed user turn
@@ -147,7 +151,22 @@ export class ChatView extends ItemView {
 		this.sendBtn.disabled = value;
 		this.textareaEl.disabled = value;
 		this.finalizeBtn.disabled = value;
-		this.sendBtn.textContent = value ? '…' : 'Send';
+		this.sendBtn.textContent = 'Send';
+	}
+
+	private showLoadingBubble(): void {
+		const agentName = this.plugin.settings.agentName || 'Agent';
+		this.loadingEl = this.messagesEl.createDiv({ cls: 'agent-message agent-message--agent' });
+		const contentEl = this.loadingEl.createDiv({ cls: 'agent-message-content agent-message-loading' });
+		contentEl.setText(`${agentName} is thinking…`);
+		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+	}
+
+	private removeLoadingBubble(): void {
+		if (this.loadingEl) {
+			this.loadingEl.remove();
+			this.loadingEl = null;
+		}
 	}
 
 	// — active.md update —

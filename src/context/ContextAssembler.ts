@@ -62,6 +62,7 @@ export class ContextAssembler {
 
 		// — Layer 2: Episodic (up to EPISODIC_BUDGET tokens) —
 		let episodicTokens = 0;
+		const allEpisodes = this.vaultManager.listFiles('_agent/memory/episodes').sort().reverse();
 
 		for (let i = 0; i < options.episodeDaysBack; i++) {
 			if (episodicTokens >= EPISODIC_BUDGET) break;
@@ -69,17 +70,22 @@ export class ContextAssembler {
 			const d = new Date();
 			d.setDate(d.getDate() - i);
 			const dateStr = d.toISOString().slice(0, 10);
-			const filePath = `_agent/memory/episodes/${dateStr}.md`;
 
-			const content = await this.vaultManager.readFile(filePath);
-			if (!content) continue;
+			const dateEpisodes = allEpisodes.filter(p => {
+				const filename = p.split('/').pop() ?? '';
+				return filename.startsWith(dateStr);
+			});
 
-			const tokens = countTokens(content);
-			if (episodicTokens + tokens > EPISODIC_BUDGET) continue;
-
-			blocks.push({ filePath, content, tokens, layer: 'episodic' });
-			totalTokens += tokens;
-			episodicTokens += tokens;
+			for (const filePath of dateEpisodes) {
+				if (episodicTokens >= EPISODIC_BUDGET) break;
+				const content = await this.vaultManager.readFile(filePath);
+				if (!content) continue;
+				const tokens = countTokens(content);
+				if (episodicTokens + tokens > EPISODIC_BUDGET) continue;
+				blocks.push({ filePath, content, tokens, layer: 'episodic' });
+				totalTokens += tokens;
+				episodicTokens += tokens;
+			}
 		}
 
 		// — Layer 3: Semantic (remaining budget) —
