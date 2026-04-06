@@ -2,7 +2,7 @@ import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from 'obsidian';
 import type MinimalAgentPlugin from '../main';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { LLMError, type ChatMessage } from '../types';
-import { countTokens } from '../utils/tokens';
+import { calcCost, countTokens, formatCost } from '../utils/tokens';
 
 export const CHAT_VIEW_TYPE = 'agent-chat';
 
@@ -117,7 +117,7 @@ export class ChatView extends ItemView {
 				this.plugin.settings.apiKey,
 				this.plugin.settings.modelSlug,
 			);
-			const response = await client.chat(messages);
+			const { content: response, usage } = await client.chat(messages);
 
 			this.removeLoadingBubble();
 			this.transcript.push({ role: 'assistant', content: response });
@@ -125,6 +125,14 @@ export class ChatView extends ItemView {
 
 			await this.updateActiveMd(response);
 			this.resetIdleTimer();
+
+			// Append cost estimate to status line once pricing resolves (usually cached)
+			void this.plugin.getModelPricing().then(pricing => {
+				if (!pricing) return;
+				const cost = calcCost(usage.promptTokens, usage.completionTokens, pricing.promptPerToken, pricing.completionPerToken);
+				const dropped = result.droppedItems > 0 ? ` · ${result.droppedItems} items dropped` : '';
+				this.statusEl.setText(`~${contextTokens + transcriptTokens} tokens · ${formatCost(cost)}${dropped}`);
+			});
 
 		} catch (e) {
 			this.removeLoadingBubble();

@@ -158,6 +158,30 @@
 	flex-shrink: 0;
 }
 
+/* ─── Status bar token count ──────────────────────────────────────────────── */
+
+.agent-status-tokens {
+	color: var(--text-muted);
+}
+
+/* ─── Settings context usage indicator ───────────────────────────────────── */
+
+.agent-ctx-info {
+	margin: 2px 0 12px;
+	padding: 6px 12px;
+	border-radius: var(--radius-s, 4px);
+	background: var(--background-secondary);
+}
+
+.agent-ctx-info__text {
+	font-size: var(--font-ui-small);
+}
+
+.agent-ctx-info--ok   { color: var(--color-green); }
+.agent-ctx-info--warn { color: var(--color-orange); }
+.agent-ctx-info--over { color: var(--color-red); }
+.agent-ctx-info--muted { color: var(--text-faint); }
+
 /* ─── Setup wizard ────────────────────────────────────────────────────────── */
 
 .agent-wizard-modal {
@@ -198,6 +222,11 @@
 
 .agent-wizard-nav--center {
 	justify-content: center;
+}
+
+.agent-wizard-cost {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
 }
 
 .agent-wizard-loading-status {

@@ -4,6 +4,6 @@
 	"version": "0.1.0",
 	"minAppVersion": "1.4.0",
 	"description": "A minimal AI agent with transparent, vault-based long-term memory.",
-	"author": "",
+	"author": "Rafafields",
 	"isDesktopOnly": false
 }

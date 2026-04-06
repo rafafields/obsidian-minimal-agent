@@ -103,13 +103,14 @@ export class MemoryExtractor {
 
 		let response: string;
 		try {
-			response = await client.chat(
+			const result = await client.chat(
 				[
 					{ role: 'system', content: SYSTEM_PROMPT },
 					{ role: 'user', content: buildUserPrompt(taxonomy, transcriptText) },
 				],
 				{ temperature: 0 },
 			);
+			response = result.content;
 		} catch (e) {
 			if (e instanceof LLMError) throw e;
 			throw new LLMError(`Extraction failed: ${String(e)}`, 0, '');

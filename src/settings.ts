@@ -18,7 +18,7 @@ export interface AgentSettings {
 export const DEFAULT_SETTINGS: AgentSettings = {
 	agentName: 'Agent',
 	apiKey: '',
-	modelSlug: 'openai/gpt-4o',
+	modelSlug: 'qwen/qwen3.5-27b',
 	contextTokenBudget: 8000,
 	episodeDaysBack: 2,
 	minImportanceForContext: 'medium',
@@ -75,9 +75,9 @@ export class AgentSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Model')
-			.setDesc('OpenRouter model slug (e.g. openai/gpt-4o, anthropic/claude-sonnet-4-5).')
+			.setDesc('OpenRouter model slug (e.g. qwen/qwen3.5-27b, anthropic/claude-sonnet-4-5).')
 			.addText(text => text
-				.setPlaceholder('openai/gpt-4o')
+				.setPlaceholder('qwen/qwen3.5-27b')
 				.setValue(this.plugin.settings.modelSlug)
 				.onChange(async (value) => {
 					this.plugin.settings.modelSlug = value.trim();
@@ -99,6 +99,30 @@ export class AgentSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}
 				}));
+
+		const ctxInfoEl = containerEl.createDiv({ cls: 'agent-ctx-info' });
+		ctxInfoEl.createSpan({ text: 'Calculating context usage…', cls: 'agent-ctx-info__text' });
+
+		void this.plugin.contextAssembler.assemble({
+			tokenBudget: this.plugin.settings.contextTokenBudget,
+			episodeDaysBack: this.plugin.settings.episodeDaysBack,
+			minImportance: this.plugin.settings.minImportanceForContext,
+		}).then(result => {
+			const budget = this.plugin.settings.contextTokenBudget;
+			const used = result.totalTokens;
+			const pct = Math.round((used / budget) * 100);
+			const dropped = result.droppedItems > 0
+				? ` · ${result.droppedItems} item${result.droppedItems !== 1 ? 's' : ''} dropped`
+				: '';
+			const label = `Context usage: ~${used.toLocaleString()} / ${budget.toLocaleString()} tokens (${pct}%)${dropped}`;
+
+			ctxInfoEl.empty();
+			const span = ctxInfoEl.createSpan({ text: label, cls: 'agent-ctx-info__text' });
+			span.addClass(pct >= 100 ? 'agent-ctx-info--over' : pct >= 80 ? 'agent-ctx-info--warn' : 'agent-ctx-info--ok');
+		}).catch(() => {
+			ctxInfoEl.empty();
+			ctxInfoEl.createSpan({ text: 'Could not calculate context — run the setup wizard first.', cls: 'agent-ctx-info__text agent-ctx-info--muted' });
+		});
 
 		new Setting(containerEl)
 			.setName('Episode history (days)')

@@ -11,6 +11,21 @@ export interface ChatMessage {
 	content: string;
 }
 
+export interface LLMUsage {
+	promptTokens: number;
+	completionTokens: number;
+}
+
+export interface LLMResponse {
+	content: string;
+	usage: LLMUsage;
+}
+
+export interface ModelPricing {
+	promptPerToken: number;
+	completionPerToken: number;
+}
+
 export interface ContextBlock {
 	filePath: string;
 	content: string;

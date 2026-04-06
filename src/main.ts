@@ -1,5 +1,8 @@
-import { Notice, Plugin, TFile } from 'obsidian';
+import { MarkdownView, Notice, Plugin, TFile } from 'obsidian';
+import { countTokens } from './utils/tokens';
 import { AgentSettings, AgentSettingTab, DEFAULT_SETTINGS } from './settings';
+import { OpenRouterClient } from './llm/OpenRouterClient';
+import type { ModelPricing } from './types';
 import { ChatView, CHAT_VIEW_TYPE } from './ui/ChatView';
 import { VaultManager } from './vault/VaultManager';
 import { FrontmatterParser } from './vault/FrontmatterParser';
@@ -29,6 +32,10 @@ export default class MinimalAgentPlugin extends Plugin {
 	private coreFileContents = new Map<string, string>();
 	private lockIconTimer: number | null = null;
 	private lockIconObserver: MutationObserver | null = null;
+	private statusBarTokenEl: HTMLElement;
+	private statusBarTimer: number | null = null;
+	private pricingCache = new Map<string, { pricing: ModelPricing; fetchedAt: number }>();
+	private static readonly PRICING_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 	async onload() {
 		await this.loadSettings();
@@ -58,6 +65,27 @@ export default class MinimalAgentPlugin extends Plugin {
 
 		this.addSettingTab(new AgentSettingTab(this.app, this));
 
+		this.statusBarTokenEl = this.addStatusBarItem();
+		this.statusBarTokenEl.addClass('agent-status-tokens');
+
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				this.updateStatusBarTokens();
+			}),
+		);
+
+		this.registerEvent(
+			this.app.vault.on('modify', (file) => {
+				if (!(file instanceof TFile)) return;
+				if (file !== this.app.workspace.getActiveFile()) return;
+				if (this.statusBarTimer !== null) window.clearTimeout(this.statusBarTimer);
+				this.statusBarTimer = window.setTimeout(() => {
+					this.statusBarTimer = null;
+					this.updateStatusBarTokens();
+				}, 500);
+			}),
+		);
+
 		this.registerVaultHooks();
 
 		this.app.workspace.onLayoutReady(() => {
@@ -68,10 +96,12 @@ export default class MinimalAgentPlugin extends Plugin {
 			void this.cleanupTraces();
 			void this.cacheCoreFiles();
 			this.setupLockIcons();
+			this.updateStatusBarTokens();
 		});
 	}
 
 	onunload() {
+		if (this.statusBarTimer !== null) window.clearTimeout(this.statusBarTimer);
 		if (this.lockIconTimer !== null) window.clearTimeout(this.lockIconTimer);
 		if (this.lockIconObserver) {
 			this.lockIconObserver.disconnect();
@@ -211,6 +241,36 @@ export default class MinimalAgentPlugin extends Plugin {
 			iconEl.setAttribute('title', tooltip);
 			navEl.insertBefore(iconEl, navEl.firstChild);
 		}
+	}
+
+	// — Pricing cache —
+
+	async getModelPricing(): Promise<ModelPricing | null> {
+		const slug = this.settings.modelSlug;
+		if (!slug || !this.settings.apiKey) return null;
+		const cached = this.pricingCache.get(slug);
+		if (cached && Date.now() - cached.fetchedAt < MinimalAgentPlugin.PRICING_TTL_MS) {
+			return cached.pricing;
+		}
+		try {
+			const pricing = await OpenRouterClient.fetchPricing(slug, this.settings.apiKey);
+			this.pricingCache.set(slug, { pricing, fetchedAt: Date.now() });
+			return pricing;
+		} catch {
+			return null;
+		}
+	}
+
+	// — Status bar token count —
+
+	private updateStatusBarTokens(): void {
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!view) {
+			this.statusBarTokenEl.setText('');
+			return;
+		}
+		const tokens = countTokens(view.editor.getValue());
+		this.statusBarTokenEl.setText(`~${tokens.toLocaleString()} tokens`);
 	}
 
 	// — Trace retention cleanup —

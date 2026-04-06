@@ -3,6 +3,8 @@ import type MinimalAgentPlugin from '../main';
 import type { VaultManager } from '../vault/VaultManager';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT } from './soulInstructions';
+import { calcCost, formatCost } from '../utils/tokens';
+import type { LLMUsage } from '../types';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -63,6 +65,7 @@ export class SetupWizard extends Modal {
 	private finishState: FinishState = 'loading';
 	private finishError = '';
 	private loadingStatusEl: HTMLElement | null = null;
+	private generationCost: number | null = null;
 
 	constructor(
 		app: App,
@@ -163,9 +166,9 @@ export class SetupWizard extends Modal {
 
 		new Setting(contentEl)
 			.setName('Model')
-			.setDesc('OpenRouter model slug (e.g. openai/gpt-4o, anthropic/claude-sonnet-4-5).')
+			.setDesc('OpenRouter model slug (e.g. qwen/qwen3.5-27b, anthropic/claude-sonnet-4-5).')
 			.addText(text => text
-				.setPlaceholder('openai/gpt-4o')
+				.setPlaceholder('qwen/qwen3.5-27b')
 				.setValue(this.modelSlug)
 				.onChange(v => { this.modelSlug = v.trim(); }));
 
@@ -337,6 +340,12 @@ export class SetupWizard extends Modal {
 				text: `Your agent "${this.agentName || 'Agent'}" has been initialized with ${this.selectedTags.size} active tags. All files are ready in your vault under _agent/.`,
 				cls: 'agent-wizard-desc',
 			});
+			if (this.generationCost !== null) {
+				contentEl.createEl('p', {
+					text: `Generation cost: ${formatCost(this.generationCost)}`,
+					cls: 'agent-wizard-desc agent-wizard-cost',
+				});
+			}
 			contentEl.createEl('p', {
 				text: 'Open the chat to start your first conversation. You can access it anytime from the ribbon or the command palette.',
 				cls: 'agent-wizard-desc',
@@ -407,10 +416,10 @@ export class SetupWizard extends Modal {
 
 	// — Soul generation —
 
-	private async generateSoul(): Promise<string> {
+	private async generateSoul(): Promise<{ body: string; usage: LLMUsage }> {
 		const client = new OpenRouterClient(
 			this.apiKey,
-			this.modelSlug || 'openai/gpt-4o',
+			this.modelSlug || 'qwen/qwen3.5-27b',
 		);
 
 		const userMessage = [
@@ -425,16 +434,17 @@ export class SetupWizard extends Modal {
 			`Write the entire document in ${this.language}.`,
 		].join('\n');
 
-		return await client.chat([
+		const { content, usage } = await client.chat([
 			{ role: 'system', content: SOUL_GENERATION_PROMPT },
 			{ role: 'user', content: userMessage },
 		], { temperature: 0.7 });
+		return { body: content, usage };
 	}
 
-	private async generateUser(): Promise<string> {
+	private async generateUser(): Promise<{ body: string; usage: LLMUsage }> {
 		const client = new OpenRouterClient(
 			this.apiKey,
-			this.modelSlug || 'openai/gpt-4o',
+			this.modelSlug || 'qwen/qwen3.5-27b',
 		);
 
 		const userMessage = [
@@ -447,10 +457,11 @@ export class SetupWizard extends Modal {
 			`Write the entire document in ${this.language}.`,
 		].join('\n');
 
-		return await client.chat([
+		const { content, usage } = await client.chat([
 			{ role: 'system', content: USER_GENERATION_PROMPT },
 			{ role: 'user', content: userMessage },
 		], { temperature: 0.5 });
+		return { body: content, usage };
 	}
 
 	// — Finish —
@@ -487,17 +498,45 @@ export class SetupWizard extends Modal {
 			this.interests.trim()
 		);
 
+		// Kick off pricing fetch concurrently — it must not block generation
+		const pricingPromise = this.plugin.getModelPricing().catch(() => null);
+
 		this.updateLoadingStatus('Generating soul.md…');
-		const soulBody = soulFormHasContent
-			? await this.generateSoul().catch(() => SOUL_FALLBACK)
-			: SOUL_FALLBACK;
+		let soulBody: string;
+		let soulUsage: import('../types').LLMUsage | null = null;
+		try {
+			const result = soulFormHasContent ? await this.generateSoul() : null;
+			soulBody = result?.body ?? SOUL_FALLBACK;
+			soulUsage = result?.usage ?? null;
+		} catch {
+			soulBody = SOUL_FALLBACK;
+		}
 
 		this.updateLoadingStatus('Generating user.md…');
-		const userBody = userFormHasContent
-			? await this.generateUser().catch(() => this.userFallback())
-			: this.userFallback();
+		let userBody: string;
+		let userUsage: import('../types').LLMUsage | null = null;
+		try {
+			const result = userFormHasContent ? await this.generateUser() : null;
+			userBody = result?.body ?? this.userFallback();
+			userUsage = result?.usage ?? null;
+		} catch {
+			userBody = this.userFallback();
+		}
 
 		this.updateLoadingStatus('Writing vault files…');
+
+		// Collect pricing (should be resolved by now; 3s safety timeout)
+		const pricing = await Promise.race([
+			pricingPromise,
+			new Promise<null>(resolve => window.setTimeout(() => resolve(null), 3000)),
+		]);
+
+		if (pricing && (soulUsage || userUsage)) {
+			let totalCost = 0;
+			if (soulUsage) totalCost += calcCost(soulUsage.promptTokens, soulUsage.completionTokens, pricing.promptPerToken, pricing.completionPerToken);
+			if (userUsage) totalCost += calcCost(userUsage.promptTokens, userUsage.completionTokens, pricing.promptPerToken, pricing.completionPerToken);
+			this.generationCost = totalCost;
+		}
 
 		try {
 			const now = new Date();
@@ -506,7 +545,7 @@ export class SetupWizard extends Modal {
 
 			this.plugin.settings.agentName = this.agentName || 'Agent';
 			this.plugin.settings.apiKey = this.apiKey;
-			this.plugin.settings.modelSlug = this.modelSlug || 'openai/gpt-4o';
+			this.plugin.settings.modelSlug = this.modelSlug || 'qwen/qwen3.5-27b';
 			await this.plugin.saveSettings();
 
 			await this.vaultManager.ensurePath('_agent/memory/episodes');
