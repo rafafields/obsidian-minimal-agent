@@ -2,7 +2,7 @@ import { App, Modal, Notice, Setting } from 'obsidian';
 import type MinimalAgentPlugin from '../main';
 import type { VaultManager } from '../vault/VaultManager';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
-import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK } from './soulInstructions';
+import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT } from './soulInstructions';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -16,6 +16,34 @@ const SUGGESTED_TAGS = [
 ];
 
 const TOTAL_STEPS = 5;
+
+const LANGUAGES: Record<string, string> = {
+	'English':   'English',
+	'Español':   'Español',
+	'Français':  'Français',
+	'Deutsch':   'Deutsch',
+	'Português': 'Português',
+	'Italiano':  'Italiano',
+	'中文':       '中文',
+	'日本語':     '日本語',
+	'한국어':     '한국어',
+};
+
+const LOCALE_MAP: Record<string, string> = {
+	es: 'Español',
+	fr: 'Français',
+	de: 'Deutsch',
+	pt: 'Português',
+	it: 'Italiano',
+	zh: '中文',
+	ja: '日本語',
+	ko: '한국어',
+};
+
+function detectDefaultLanguage(): string {
+	const code = window.navigator.language?.split('-')[0] ?? 'en';
+	return LOCALE_MAP[code] ?? 'English';
+}
 
 type FinishState = 'loading' | 'done' | 'error';
 
@@ -31,8 +59,10 @@ export class SetupWizard extends Modal {
 	private commPreferences = '';
 	private interests = '';
 	private selectedTags: Set<string>;
+	private language: string;
 	private finishState: FinishState = 'loading';
 	private finishError = '';
+	private loadingStatusEl: HTMLElement | null = null;
 
 	constructor(
 		app: App,
@@ -44,6 +74,7 @@ export class SetupWizard extends Modal {
 		this.apiKey = plugin.settings.apiKey;
 		this.modelSlug = plugin.settings.modelSlug;
 		this.selectedTags = new Set(SUGGESTED_TAGS);
+		this.language = detectDefaultLanguage();
 	}
 
 	static isFirstRun(app: App): boolean {
@@ -94,6 +125,16 @@ export class SetupWizard extends Modal {
 			text: 'This wizard will help you configure the API connection, define your agent\'s identity, and set up your vault structure. It only takes a minute.',
 			cls: 'agent-wizard-desc',
 		});
+
+		new Setting(contentEl)
+			.setName('Language')
+			.setDesc('Language used for the generated soul and user documents.')
+			.addDropdown(dd => {
+				for (const lang of Object.keys(LANGUAGES)) {
+					dd.addOption(lang, lang);
+				}
+				dd.setValue(this.language).onChange(v => { this.language = v; });
+			});
 
 		this.renderNav(null, () => { this.step = 2; this.render(); }, 'Get started');
 	}
@@ -285,9 +326,9 @@ export class SetupWizard extends Modal {
 		if (this.finishState === 'loading') {
 			this.renderEmoji(contentEl, '⚙️');
 			contentEl.createEl('h2', { text: 'Setting up your agent…' });
-			contentEl.createEl('p', {
-				text: 'Generating your agent\'s soul and creating vault files. This may take a few seconds.',
-				cls: 'agent-wizard-desc',
+			this.loadingStatusEl = contentEl.createEl('p', {
+				text: 'Starting…',
+				cls: 'agent-wizard-loading-status',
 			});
 		} else if (this.finishState === 'done') {
 			this.renderEmoji(contentEl, '🎉');
@@ -331,6 +372,10 @@ export class SetupWizard extends Modal {
 	}
 
 	// — Helpers —
+
+	private updateLoadingStatus(text: string): void {
+		if (this.loadingStatusEl) this.loadingStatusEl.setText(text);
+	}
 
 	private renderEmoji(container: HTMLElement, emoji: string) {
 		container.createEl('div', { text: emoji, cls: 'agent-wizard-emoji' });
@@ -376,6 +421,8 @@ export class SetupWizard extends Modal {
 			`Core values: ${this.coreValues}`,
 			'',
 			`Voice and tone: ${this.voiceTone}`,
+			'',
+			`Write the entire document in ${this.language}.`,
 		].join('\n');
 
 		return await client.chat([
@@ -384,26 +431,73 @@ export class SetupWizard extends Modal {
 		], { temperature: 0.7 });
 	}
 
+	private async generateUser(): Promise<string> {
+		const client = new OpenRouterClient(
+			this.apiKey,
+			this.modelSlug || 'openai/gpt-4o',
+		);
+
+		const userMessage = [
+			`Work style: ${this.workStyle || 'Not provided.'}`,
+			'',
+			`Communication preferences: ${this.commPreferences || 'Not provided.'}`,
+			'',
+			`Current areas of focus: ${this.interests || 'Not provided.'}`,
+			'',
+			`Write the entire document in ${this.language}.`,
+		].join('\n');
+
+		return await client.chat([
+			{ role: 'system', content: USER_GENERATION_PROMPT },
+			{ role: 'user', content: userMessage },
+		], { temperature: 0.5 });
+	}
+
 	// — Finish —
 
+	private userFallback(): string {
+		return [
+			'## Work style',
+			'',
+			this.workStyle || 'To be defined.',
+			'',
+			'## Communication preferences',
+			'',
+			this.commPreferences || 'To be defined.',
+			'',
+			'## Current areas of focus',
+			'',
+			this.interests || 'To be defined.',
+			'',
+			'## Patterns to avoid',
+			'',
+			'## Relevant personal context',
+		].join('\n');
+	}
+
 	private async runFinish(): Promise<void> {
-		const formHasContent = !!(
+		const soulFormHasContent = !!(
 			this.corePurpose.trim() ||
 			this.coreValues.trim() ||
 			this.voiceTone.trim()
 		);
+		const userFormHasContent = !!(
+			this.workStyle.trim() ||
+			this.commPreferences.trim() ||
+			this.interests.trim()
+		);
 
-		let soulBody: string;
+		this.updateLoadingStatus('Generating soul.md…');
+		const soulBody = soulFormHasContent
+			? await this.generateSoul().catch(() => SOUL_FALLBACK)
+			: SOUL_FALLBACK;
 
-		if (!formHasContent) {
-			soulBody = SOUL_FALLBACK;
-		} else {
-			try {
-				soulBody = await this.generateSoul();
-			} catch {
-				soulBody = SOUL_FALLBACK;
-			}
-		}
+		this.updateLoadingStatus('Generating user.md…');
+		const userBody = userFormHasContent
+			? await this.generateUser().catch(() => this.userFallback())
+			: this.userFallback();
+
+		this.updateLoadingStatus('Writing vault files…');
 
 		try {
 			const now = new Date();
@@ -441,21 +535,7 @@ export class SetupWizard extends Modal {
 				'origin: hybrid',
 				'---',
 				'',
-				'## Work style',
-				'',
-				this.workStyle || 'To be defined.',
-				'',
-				'## Communication preferences',
-				'',
-				this.commPreferences || 'To be defined.',
-				'',
-				'## Current areas of focus',
-				'',
-				this.interests || 'To be defined.',
-				'',
-				'## Patterns to avoid',
-				'',
-				'## Relevant personal context',
+				userBody,
 			].join('\n'));
 
 			const activeTags = [...this.selectedTags].join('\n');

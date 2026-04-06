@@ -16,6 +16,7 @@ export class ChatView extends ItemView {
 	private textareaEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
 	private finalizeBtn!: HTMLButtonElement;
+	private saveChatBtn!: HTMLButtonElement;
 	private statusEl!: HTMLElement;
 	private loadingEl: HTMLElement | null = null;
 
@@ -49,15 +50,21 @@ export class ChatView extends ItemView {
 			cls: 'mod-cta agent-chat-send',
 		});
 
-		this.finalizeBtn = footerEl.createEl('button', {
+		const actionsEl = footerEl.createDiv({ cls: 'agent-chat-actions' });
+		this.finalizeBtn = actionsEl.createEl('button', {
 			text: 'Finalize and memorize',
 			cls: 'agent-chat-finalize',
+		});
+		this.saveChatBtn = actionsEl.createEl('button', {
+			text: 'Save conversation',
+			cls: 'agent-chat-save',
 		});
 
 		this.statusEl = footerEl.createDiv({ cls: 'agent-chat-status' });
 
 		this.sendBtn.addEventListener('click', () => { void this.handleSend(); });
 		this.finalizeBtn.addEventListener('click', () => { void this.finalizeSession(); });
+		this.saveChatBtn.addEventListener('click', () => { void this.saveChat(); });
 		this.textareaEl.addEventListener('keydown', (e) => {
 			if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
 				e.preventDefault();
@@ -151,6 +158,7 @@ export class ChatView extends ItemView {
 		this.sendBtn.disabled = value;
 		this.textareaEl.disabled = value;
 		this.finalizeBtn.disabled = value;
+		this.saveChatBtn.disabled = value;
 		this.sendBtn.textContent = 'Send';
 	}
 
@@ -203,6 +211,38 @@ export class ChatView extends ItemView {
 			}
 		}
 		return trimmed.slice(0, endIdx);
+	}
+
+	// — Save conversation —
+
+	private async saveChat(): Promise<void> {
+		if (this.transcript.length === 0) return;
+
+		const now = new Date();
+		const date = now.toISOString().slice(0, 10);
+		const timeParts = now.toISOString().slice(11, 16); // HH:MM
+		const fileTime = timeParts.replace(':', '-');       // HH-MM (safe for filenames)
+		const displayTime = timeParts;                      // HH:MM (for display)
+
+		const agentName = this.plugin.settings.agentName || 'Agent';
+		const lines: string[] = [
+			`# Chat · ${date} ${displayTime}`,
+			'',
+		];
+
+		for (const msg of this.transcript) {
+			const speaker = msg.role === 'user' ? 'You' : agentName;
+			lines.push(`**${speaker}**`, '', msg.content.trim(), '', '---', '');
+		}
+
+		// Remove the trailing separator
+		while (lines.length > 0 && (lines[lines.length - 1] === '' || lines[lines.length - 1] === '---')) {
+			lines.pop();
+		}
+
+		const path = `chats/${date} ${fileTime}.md`;
+		await this.plugin.vaultManager.writeFile(path, lines.join('\n'));
+		new Notice(`Conversation saved to ${path}`);
 	}
 
 	// — Session finalization —

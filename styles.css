@@ -100,10 +100,16 @@
 	padding: 0 14px;
 }
 
-/* ─── Finalize button ─────────────────────────────────────────────────────── */
+/* ─── Action buttons row ──────────────────────────────────────────────────── */
 
-.agent-chat-finalize {
-	width: 100%;
+.agent-chat-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.agent-chat-finalize,
+.agent-chat-save {
+	flex: 1;
 	background: none;
 	border: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
@@ -114,12 +120,14 @@
 	transition: border-color 0.1s, color 0.1s;
 }
 
-.agent-chat-finalize:hover {
+.agent-chat-finalize:hover,
+.agent-chat-save:hover {
 	border-color: var(--interactive-accent);
 	color: var(--interactive-accent);
 }
 
-.agent-chat-finalize:disabled {
+.agent-chat-finalize:disabled,
+.agent-chat-save:disabled {
 	opacity: 0.4;
 	cursor: default;
 }
@@ -190,4 +198,12 @@
 
 .agent-wizard-nav--center {
 	justify-content: center;
+}
+
+.agent-wizard-loading-status {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-style: italic;
+	margin: 8px 0 0;
+	transition: opacity 0.2s;
 }
