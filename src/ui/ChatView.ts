@@ -181,7 +181,7 @@ export class ChatView extends ItemView {
 
 		const { frontmatter, body } = this.plugin.parser.parse(content);
 		const updatedFm = { ...frontmatter, updated_at: now };
-		const updatedBody = this.plugin.parser.updateSection(body, 'Foco actual', summary);
+		const updatedBody = this.plugin.parser.updateSection(body, 'Current focus', summary);
 
 		await this.plugin.vaultManager.writeFile(
 			path,

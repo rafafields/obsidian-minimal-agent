@@ -2,7 +2,7 @@ import type { VaultManager } from './VaultManager';
 import type { FrontmatterParser } from './FrontmatterParser';
 
 const TAXONOMY_PATH = '_agent/taxonomy.md';
-const ACTIVE_SECTION = 'Topics activos';
+const ACTIVE_SECTION = 'Active topics';
 
 export class TaxonomyManager {
 	constructor(

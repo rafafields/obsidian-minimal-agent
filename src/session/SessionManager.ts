@@ -81,29 +81,29 @@ export class SessionManager {
 
 		const decisionLines = decisions.length > 0
 			? decisions.map(c => `- ${c.title}: ${c.what.slice(0, 80)}`).join('\n')
-			: 'ninguna';
+			: 'none';
 
 		const riskLines = risks.length > 0
 			? risks.map(c => `- ${c.title}`).join('\n')
-			: 'ninguna';
+			: 'none';
 
 		const sessionBlock = [
-			`## Sesión ${datetime.replace('T', ' ')}`,
+			`## Session ${datetime.replace('T', ' ')}`,
 			'',
-			'### Qué se intentó',
+			'### What was attempted',
 			'',
 			intention,
 			'',
-			'### Qué se produjo',
+			'### What was produced',
 			'',
-			`- ${Math.floor(transcript.length / 2)} intercambios`,
-			`- ${candidates.length} candidatos de memoria extraídos`,
+			`- ${Math.floor(transcript.length / 2)} exchanges`,
+			`- ${candidates.length} memory candidates extracted`,
 			'',
-			'### Decisiones tomadas',
+			'### Decisions made',
 			'',
 			decisionLines,
 			'',
-			'### Preguntas abiertas',
+			'### Open questions',
 			'',
 			riskLines,
 		].join('\n');
@@ -148,17 +148,17 @@ export class SessionManager {
 		};
 
 		const body = [
-			'## Qué ocurrió / qué se aprendió',
+			'## What happened / what was learned',
 			'',
 			candidate.what,
 			'',
-			'## Implicación',
+			'## Implication',
 			'',
 			candidate.implication,
 			'',
-			'## Contexto de origen',
+			'## Origin context',
 			'',
-			`Extraído de sesión ${sessionId}.`,
+			`Extracted from session ${sessionId}.`,
 		].join('\n');
 
 		await this.vaultManager.writeFile(path, this.parser.serialize(fm, body));
@@ -204,12 +204,12 @@ export class SessionManager {
 
 		const highestImportance = candidates.find(c => c.importance === 'critical') ?? candidates[0];
 		const nextStep = highestImportance
-			? `Revisar y confirmar: _pending/${this.sanitizeFilename(highestImportance.title)}.md`
+			? `Review and confirm: _pending/${this.sanitizeFilename(highestImportance.title)}.md`
 			: '';
 
-		let updatedBody = this.parser.updateSection(body, 'Decisiones recientes', decisionLines);
+		let updatedBody = this.parser.updateSection(body, 'Recent decisions', decisionLines);
 		if (nextStep) {
-			updatedBody = this.parser.updateSection(updatedBody, 'Siguiente paso', nextStep);
+			updatedBody = this.parser.updateSection(updatedBody, 'Next step', nextStep);
 		}
 
 		const updatedFm = { ...frontmatter, updated_at: datetime };

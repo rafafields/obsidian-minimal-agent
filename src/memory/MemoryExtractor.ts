@@ -5,54 +5,54 @@ import { countTokens } from '../utils/tokens';
 const COMPRESSION_THRESHOLD = 6000;
 const COMPRESSED_MAX = 5000;
 
-const SYSTEM_PROMPT = `Eres un extractor de memoria estructurada. Tu única función es analizar una sesión de conversación y determinar qué información merece persistirse como memoria a largo plazo.
+const SYSTEM_PROMPT = `You are a structured memory extractor. Your sole function is to analyze a conversation session and determine what information deserves to be persisted as long-term memory.
 
-Operas con sesgo conservador: es mejor no extraer que extraer ruido.
-Solo extrae lo que seguirá siendo relevante en 4 semanas.
+You operate with a conservative bias: it is better to extract nothing than to extract noise.
+Only extract what will still be relevant in 4 weeks.
 
-Formato de salida: JSON array. No escribas nada fuera del JSON.`;
+Output format: JSON array. Write nothing outside the JSON.`;
 
 function buildUserPrompt(taxonomy: string, transcript: string): string {
-	return `## Configuración del agente
+	return `## Agent configuration
 
-### Taxonomía de tags autorizadas
+### Authorized tag taxonomy
 ${taxonomy}
 
-## Transcript de la sesión
+## Session transcript
 
 ${transcript}
 
-## Instrucción
+## Instruction
 
-Analiza la sesión y extrae entre 0 y 5 memory_item candidates.
+Analyze the session and extract between 0 and 5 memory_item candidates.
 
-Para cada candidato devuelve un objeto JSON con exactamente estos campos:
+For each candidate return a JSON object with exactly these fields:
 {
-  "title": "slug-descriptivo-kebab-case",
+  "title": "descriptive-kebab-case-slug",
   "memory_kind": "decision|insight|constraint|risk|summary|pattern",
   "memory_tier": "working|semantic",
   "importance": "low|medium|high|critical",
   "confidence": "low|medium|high",
   "tags": ["#topic/x"],
   "proposed_tags": [],
-  "what": "2-4 frases legibles sin contexto de sesión.",
-  "implication": "Por qué importa para el agente o el usuario.",
-  "expires_at": "YYYY-MM-DD o null"
+  "what": "2-4 readable sentences without session-specific context.",
+  "implication": "Why this matters for the agent or the user.",
+  "expires_at": "YYYY-MM-DD or null"
 }
 
-Criterios:
-EXTRAE si → se tomó una decisión con razonamiento explícito
-EXTRAE si → se identificó una restricción real
-EXTRAE si → emergió un insight no obvio sobre el dominio o el usuario
-EXTRAE si → hay un riesgo concreto identificado
-EXTRAE si → el usuario reveló una preferencia o patrón recurrente
+Criteria:
+EXTRACT if → a decision was made with explicit reasoning
+EXTRACT if → a real constraint was identified
+EXTRACT if → a non-obvious insight about the domain or user emerged
+EXTRACT if → a concrete risk was identified
+EXTRACT if → the user revealed a preference or recurring pattern
 
-NO EXTRAE si → es información efímera que solo vale para esta sesión
-NO EXTRAE si → es contexto ya presente en soul.md o user.md
-NO EXTRAE si → es una tarea o acción pendiente
-NO EXTRAE si → es resumen de lo que ocurrió (eso es el episode)
+DO NOT EXTRACT if → the information is ephemeral and only relevant to this session
+DO NOT EXTRACT if → the context is already present in soul.md or user.md
+DO NOT EXTRACT if → it is a pending task or action
+DO NOT EXTRACT if → it is a summary of what happened (that belongs in the episode)
 
-Si no hay nada que merezca persistirse: []`;
+If nothing deserves to be persisted: []`;
 }
 
 function sanitizeForPrompt(text: string): string {

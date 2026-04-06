@@ -89,7 +89,7 @@ export default class MinimalAgentPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private openChatView() {
+	openChatView() {
 		const leaf = this.app.workspace.getRightLeaf(false);
 		if (leaf) {
 			leaf.setViewState({ type: CHAT_VIEW_TYPE, active: true });

@@ -15,6 +15,10 @@ const SUGGESTED_TAGS = [
 	'#topic/creativity',
 ];
 
+const TOTAL_STEPS = 5;
+
+type FinishState = 'loading' | 'done' | 'error';
+
 export class SetupWizard extends Modal {
 	private step = 1;
 	private agentName: string;
@@ -27,6 +31,8 @@ export class SetupWizard extends Modal {
 	private commPreferences = '';
 	private interests = '';
 	private selectedTags: Set<string>;
+	private finishState: FinishState = 'loading';
+	private finishError = '';
 
 	constructor(
 		app: App,
@@ -57,30 +63,55 @@ export class SetupWizard extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 
-		contentEl.createEl('p', {
-			text: `Step ${this.step} of 4`,
-			cls: 'agent-wizard-progress',
-		});
+		if (this.step <= TOTAL_STEPS) {
+			contentEl.createEl('p', {
+				text: `Step ${this.step} of ${TOTAL_STEPS}`,
+				cls: 'agent-wizard-progress',
+			});
+		}
 
 		switch (this.step) {
 			case 1: this.renderStep1(); break;
 			case 2: this.renderStep2(); break;
 			case 3: this.renderStep3(); break;
 			case 4: this.renderStep4(); break;
+			case 5: this.renderStep5(); break;
+			case 6: this.renderStep6(); break;
 		}
 	}
 
+	// — Step 1: Welcome —
+
 	private renderStep1() {
 		const { contentEl } = this;
+		this.renderEmoji(contentEl, '🤖');
 		contentEl.createEl('h2', { text: 'Welcome to Minimal Agent' });
 		contentEl.createEl('p', {
-			text: 'A minimal AI agent with transparent, vault-based memory. All agent state lives as readable Markdown files in your vault. Let\'s get you set up.',
+			text: 'A minimal AI agent that lives entirely inside your vault. Its personality, memory, and everything it knows about you are stored as plain Markdown files you can read and edit at any time.',
+			cls: 'agent-wizard-desc',
+		});
+		contentEl.createEl('p', {
+			text: 'This wizard will help you configure the API connection, define your agent\'s identity, and set up your vault structure. It only takes a minute.',
+			cls: 'agent-wizard-desc',
+		});
+
+		this.renderNav(null, () => { this.step = 2; this.render(); }, 'Get started');
+	}
+
+	// — Step 2: API config —
+
+	private renderStep2() {
+		const { contentEl } = this;
+		this.renderEmoji(contentEl, '🔑');
+		contentEl.createEl('h2', { text: 'Connect to OpenRouter' });
+		contentEl.createEl('p', {
+			text: 'Minimal Agent uses OpenRouter to access language models. Your API key is stored only in Obsidian plugin settings — never written to the vault.',
 			cls: 'agent-wizard-desc',
 		});
 
 		new Setting(contentEl)
 			.setName('OpenRouter API key')
-			.setDesc('Your key from openrouter.ai. Stored in plugin settings, never in the vault.')
+			.setDesc('Your key from openrouter.ai.')
 			.addText(text => {
 				text.inputEl.type = 'password';
 				text
@@ -97,18 +128,24 @@ export class SetupWizard extends Modal {
 				.setValue(this.modelSlug)
 				.onChange(v => { this.modelSlug = v.trim(); }));
 
-		this.renderNav(null, (_btn) => {
-			if (!this.apiKey) {
-				new Notice('API key is required to continue.');
-				return;
-			}
-			this.step = 2;
-			this.render();
-		});
+		this.renderNav(
+			() => { this.step = 1; this.render(); },
+			() => {
+				if (!this.apiKey) {
+					new Notice('API key is required to continue.');
+					return;
+				}
+				this.step = 3;
+				this.render();
+			},
+		);
 	}
 
-	private renderStep2() {
+	// — Step 3: Define agent —
+
+	private renderStep3() {
 		const { contentEl } = this;
+		this.renderEmoji(contentEl, '✨');
 		contentEl.createEl('h2', { text: 'Define your agent' });
 		contentEl.createEl('p', {
 			text: 'These fields generate _agent/soul.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
@@ -154,13 +191,16 @@ export class SetupWizard extends Modal {
 			});
 
 		this.renderNav(
-			() => { this.step = 1; this.render(); },
-			(_btn) => { this.step = 3; this.render(); },
+			() => { this.step = 2; this.render(); },
+			() => { this.step = 4; this.render(); },
 		);
 	}
 
-	private renderStep3() {
+	// — Step 4: About you —
+
+	private renderStep4() {
 		const { contentEl } = this;
+		this.renderEmoji(contentEl, '👤');
 		contentEl.createEl('h2', { text: 'About you' });
 		contentEl.createEl('p', {
 			text: 'These fields generate _agent/user.md — how the agent models you. Edit it freely at any time.',
@@ -198,13 +238,16 @@ export class SetupWizard extends Modal {
 			});
 
 		this.renderNav(
-			() => { this.step = 2; this.render(); },
-			(_btn) => { this.step = 4; this.render(); },
+			() => { this.step = 3; this.render(); },
+			() => { this.step = 5; this.render(); },
 		);
 	}
 
-	private renderStep4() {
+	// — Step 5: Tags —
+
+	private renderStep5() {
 		const { contentEl } = this;
+		this.renderEmoji(contentEl, '🏷️');
 		contentEl.createEl('h2', { text: 'Initial tag taxonomy' });
 		contentEl.createEl('p', {
 			text: 'Select the topic tags to activate in _agent/taxonomy.md. The agent can only assign tags from this list. You can add more directly in the file at any time.',
@@ -223,18 +266,85 @@ export class SetupWizard extends Modal {
 		}
 
 		this.renderNav(
-			() => { this.step = 3; this.render(); },
-			(btn) => { void this.finish(btn); },
+			() => { this.step = 4; this.render(); },
+			() => {
+				this.finishState = 'loading';
+				this.step = 6;
+				this.render();
+				void this.runFinish();
+			},
 			'Finish',
 		);
 	}
 
+	// — Step 6: Loading / Success / Error —
+
+	private renderStep6() {
+		const { contentEl } = this;
+
+		if (this.finishState === 'loading') {
+			this.renderEmoji(contentEl, '⚙️');
+			contentEl.createEl('h2', { text: 'Setting up your agent…' });
+			contentEl.createEl('p', {
+				text: 'Generating your agent\'s soul and creating vault files. This may take a few seconds.',
+				cls: 'agent-wizard-desc',
+			});
+		} else if (this.finishState === 'done') {
+			this.renderEmoji(contentEl, '🎉');
+			contentEl.createEl('h2', { text: 'You\'re all set!' });
+			contentEl.createEl('p', {
+				text: `Your agent "${this.agentName || 'Agent'}" has been initialized with ${this.selectedTags.size} active tags. All files are ready in your vault under _agent/.`,
+				cls: 'agent-wizard-desc',
+			});
+			contentEl.createEl('p', {
+				text: 'Open the chat to start your first conversation. You can access it anytime from the ribbon or the command palette.',
+				cls: 'agent-wizard-desc',
+			});
+
+			const navEl = contentEl.createDiv({ cls: 'agent-wizard-nav agent-wizard-nav--center' });
+			const openBtn = navEl.createEl('button', {
+				text: 'Open chat',
+				cls: 'mod-cta',
+			});
+			openBtn.addEventListener('click', () => {
+				this.close();
+				this.plugin.openChatView();
+			});
+		} else {
+			this.renderEmoji(contentEl, '❌');
+			contentEl.createEl('h2', { text: 'Setup failed' });
+			contentEl.createEl('p', {
+				text: this.finishError || 'An unexpected error occurred.',
+				cls: 'agent-wizard-desc',
+			});
+
+			this.renderNav(
+				() => { this.step = 5; this.render(); },
+				() => {
+					this.finishState = 'loading';
+					this.render();
+					void this.runFinish();
+				},
+				'Try again',
+			);
+		}
+	}
+
+	// — Helpers —
+
+	private renderEmoji(container: HTMLElement, emoji: string) {
+		container.createEl('div', { text: emoji, cls: 'agent-wizard-emoji' });
+	}
+
 	private renderNav(
 		onBack: (() => void) | null,
-		onNext: ((btn: HTMLButtonElement) => void) | null,
+		onNext: (() => void) | null,
 		nextLabel = 'Next',
 	) {
-		const navEl = this.contentEl.createDiv({ cls: 'agent-wizard-nav' });
+		const hasBoth = !!onBack && !!onNext;
+		const navEl = this.contentEl.createDiv({
+			cls: 'agent-wizard-nav' + (hasBoth ? ' agent-wizard-nav--split' : ''),
+		});
 
 		if (onBack) {
 			const backBtn = navEl.createEl('button', { text: 'Back' });
@@ -246,7 +356,7 @@ export class SetupWizard extends Modal {
 				text: nextLabel,
 				cls: 'mod-cta',
 			});
-			nextBtn.addEventListener('click', () => onNext(nextBtn));
+			nextBtn.addEventListener('click', onNext);
 		}
 	}
 
@@ -276,7 +386,7 @@ export class SetupWizard extends Modal {
 
 	// — Finish —
 
-	private async finish(finishBtn: HTMLButtonElement): Promise<void> {
+	private async runFinish(): Promise<void> {
 		const formHasContent = !!(
 			this.corePurpose.trim() ||
 			this.coreValues.trim() ||
@@ -288,16 +398,10 @@ export class SetupWizard extends Modal {
 		if (!formHasContent) {
 			soulBody = SOUL_FALLBACK;
 		} else {
-			finishBtn.disabled = true;
-			finishBtn.textContent = 'Generating soul…';
 			try {
 				soulBody = await this.generateSoul();
 			} catch {
-				new Notice('Soul generation failed — using default soul instead.');
 				soulBody = SOUL_FALLBACK;
-			} finally {
-				finishBtn.disabled = false;
-				finishBtn.textContent = 'Finish';
 			}
 		}
 
@@ -306,18 +410,15 @@ export class SetupWizard extends Modal {
 			const date = now.toISOString().slice(0, 10);
 			const datetime = now.toISOString().slice(0, 16);
 
-			// Save settings
 			this.plugin.settings.agentName = this.agentName || 'Agent';
 			this.plugin.settings.apiKey = this.apiKey;
 			this.plugin.settings.modelSlug = this.modelSlug || 'openai/gpt-4o';
 			await this.plugin.saveSettings();
 
-			// Create folder structure
 			await this.vaultManager.ensurePath('_agent/memory/episodes');
 			await this.vaultManager.ensurePath('_agent/memory/items/_pending');
 			await this.vaultManager.ensurePath('_system/traces');
 
-			// soul.md — LLM-generated body or fallback
 			await this.vaultManager.writeFile('_agent/soul.md', [
 				'---',
 				'kind: agent_soul',
@@ -331,7 +432,6 @@ export class SetupWizard extends Modal {
 				soulBody,
 			].join('\n'));
 
-			// user.md
 			await this.vaultManager.writeFile('_agent/user.md', [
 				'---',
 				'kind: agent_user',
@@ -341,24 +441,23 @@ export class SetupWizard extends Modal {
 				'origin: hybrid',
 				'---',
 				'',
-				'## Forma de trabajar',
+				'## Work style',
 				'',
 				this.workStyle || 'To be defined.',
 				'',
-				'## Preferencias de comunicación',
+				'## Communication preferences',
 				'',
 				this.commPreferences || 'To be defined.',
 				'',
-				'## Áreas de interés actuales',
+				'## Current areas of focus',
 				'',
 				this.interests || 'To be defined.',
 				'',
-				'## Patrones a evitar',
+				'## Patterns to avoid',
 				'',
-				'## Contexto personal relevante',
+				'## Relevant personal context',
 			].join('\n'));
 
-			// taxonomy.md
 			const activeTags = [...this.selectedTags].join('\n');
 			await this.vaultManager.writeFile('_agent/taxonomy.md', [
 				'---',
@@ -367,14 +466,13 @@ export class SetupWizard extends Modal {
 				'origin: human',
 				'---',
 				'',
-				'## Topics activos',
+				'## Active topics',
 				'',
 				activeTags,
 				'',
-				'## Propuestas pendientes',
+				'## Pending proposals',
 			].join('\n'));
 
-			// memory/active.md
 			await this.vaultManager.writeFile('_agent/memory/active.md', [
 				'---',
 				'kind: memory_active',
@@ -384,22 +482,23 @@ export class SetupWizard extends Modal {
 				'origin: hybrid',
 				'---',
 				'',
-				'## Foco actual',
+				'## Current focus',
 				'',
-				'## Decisiones recientes',
+				'## Recent decisions',
 				'',
-				'## Bloqueos',
+				'## Blockers',
 				'',
-				'ninguno',
+				'none',
 				'',
-				'## Siguiente paso',
+				'## Next step',
 			].join('\n'));
 
-			new Notice(`Agent initialized. ${this.selectedTags.size} tags activated.`);
-			this.close();
+			this.finishState = 'done';
+			this.render();
 		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			new Notice(`Setup failed: ${msg}`);
+			this.finishError = e instanceof Error ? e.message : String(e);
+			this.finishState = 'error';
+			this.render();
 		}
 	}
 }
