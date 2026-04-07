@@ -5,6 +5,7 @@ import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT } from './soulInstructions';
 import { calcCost, formatCost } from '../utils/tokens';
 import type { LLMUsage } from '../types';
+import { createMascotImg, type MascotState } from '../ui/mascot';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -93,9 +94,15 @@ export class SetupWizard extends Modal {
 		this.contentEl.empty();
 	}
 
+	private isCenteredStep(): boolean {
+		return this.step === 1 ||
+			(this.step === 6 && this.finishState !== 'error');
+	}
+
 	private render() {
 		const { contentEl } = this;
 		contentEl.empty();
+		contentEl.toggleClass('agent-wizard-centered', this.isCenteredStep());
 
 		if (this.step <= TOTAL_STEPS) {
 			contentEl.createEl('p', {
@@ -118,7 +125,7 @@ export class SetupWizard extends Modal {
 
 	private renderStep1() {
 		const { contentEl } = this;
-		this.renderEmoji(contentEl, '🤖');
+		this.renderMascot(contentEl, 'inlove');
 		contentEl.createEl('h2', { text: 'Welcome to Minimal Agent' });
 		contentEl.createEl('p', {
 			text: 'A minimal AI agent that lives entirely inside your vault. Its personality, memory, and everything it knows about you are stored as plain Markdown files you can read and edit at any time.',
@@ -146,7 +153,6 @@ export class SetupWizard extends Modal {
 
 	private renderStep2() {
 		const { contentEl } = this;
-		this.renderEmoji(contentEl, '🔑');
 		contentEl.createEl('h2', { text: 'Connect to OpenRouter' });
 		contentEl.createEl('p', {
 			text: 'Minimal Agent uses OpenRouter to access language models. Your API key is stored only in Obsidian plugin settings — never written to the vault.',
@@ -189,7 +195,6 @@ export class SetupWizard extends Modal {
 
 	private renderStep3() {
 		const { contentEl } = this;
-		this.renderEmoji(contentEl, '✨');
 		contentEl.createEl('h2', { text: 'Define your agent' });
 		contentEl.createEl('p', {
 			text: 'These fields generate _agent/soul.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
@@ -244,7 +249,6 @@ export class SetupWizard extends Modal {
 
 	private renderStep4() {
 		const { contentEl } = this;
-		this.renderEmoji(contentEl, '👤');
 		contentEl.createEl('h2', { text: 'About you' });
 		contentEl.createEl('p', {
 			text: 'These fields generate _agent/user.md — how the agent models you. Edit it freely at any time.',
@@ -291,7 +295,6 @@ export class SetupWizard extends Modal {
 
 	private renderStep5() {
 		const { contentEl } = this;
-		this.renderEmoji(contentEl, '🏷️');
 		contentEl.createEl('h2', { text: 'Initial tag taxonomy' });
 		contentEl.createEl('p', {
 			text: 'Select the topic tags to activate in _agent/taxonomy.md. The agent can only assign tags from this list. You can add more directly in the file at any time.',
@@ -327,14 +330,14 @@ export class SetupWizard extends Modal {
 		const { contentEl } = this;
 
 		if (this.finishState === 'loading') {
-			this.renderEmoji(contentEl, '⚙️');
+			this.renderMascot(contentEl, 'thinking');
 			contentEl.createEl('h2', { text: 'Setting up your agent…' });
 			this.loadingStatusEl = contentEl.createEl('p', {
 				text: 'Starting…',
 				cls: 'agent-wizard-loading-status',
 			});
 		} else if (this.finishState === 'done') {
-			this.renderEmoji(contentEl, '🎉');
+			this.renderMascot(contentEl, 'inlove');
 			contentEl.createEl('h2', { text: 'You\'re all set!' });
 			contentEl.createEl('p', {
 				text: `Your agent "${this.agentName || 'Agent'}" has been initialized with ${this.selectedTags.size} active tags. All files are ready in your vault under _agent/.`,
@@ -361,7 +364,6 @@ export class SetupWizard extends Modal {
 				this.plugin.openChatView();
 			});
 		} else {
-			this.renderEmoji(contentEl, '❌');
 			contentEl.createEl('h2', { text: 'Setup failed' });
 			contentEl.createEl('p', {
 				text: this.finishError || 'An unexpected error occurred.',
@@ -386,8 +388,9 @@ export class SetupWizard extends Modal {
 		if (this.loadingStatusEl) this.loadingStatusEl.setText(text);
 	}
 
-	private renderEmoji(container: HTMLElement, emoji: string) {
-		container.createEl('div', { text: emoji, cls: 'agent-wizard-emoji' });
+	private renderMascot(container: HTMLElement, state: MascotState) {
+		const wrapper = container.createDiv({ cls: 'agent-wizard-mascot' });
+		createMascotImg(wrapper, state, 'agent-wizard-mascot-img');
 	}
 
 	private renderNav(

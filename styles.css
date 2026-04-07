@@ -72,7 +72,7 @@
 .agent-chat-composer {
 	display: flex;
 	gap: 6px;
-	align-items: flex-end;
+	align-items: stretch;
 }
 
 .agent-chat-input {
@@ -96,8 +96,24 @@
 
 .agent-chat-send {
 	flex-shrink: 0;
-	height: 32px;
-	padding: 0 14px;
+	padding: 0 16px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	height: 88px;
+}
+
+.agent-chat-send-icon {
+	font-size: 1.15rem;
+	line-height: 1;
+}
+
+.agent-chat-send-label {
+	font-size: 0.65rem;
+	opacity: 0.85;
+	letter-spacing: 0.02em;
 }
 
 /* ─── Action buttons row ──────────────────────────────────────────────────── */
@@ -139,15 +155,6 @@
 	font-style: italic;
 }
 
-/* ─── Status line ─────────────────────────────────────────────────────────── */
-
-.agent-chat-status {
-	font-size: var(--font-ui-smaller);
-	color: var(--text-faint);
-	text-align: right;
-	min-height: 1em;
-}
-
 /* ─── File explorer lock icons ────────────────────────────────────────────── */
 
 .agent-lock-icon {
@@ -182,17 +189,85 @@
 .agent-ctx-info--over { color: var(--color-red); }
 .agent-ctx-info--muted { color: var(--text-faint); }
 
+/* ─── Face avatar keyframes ───────────────────────────────────────────────── */
+
+@keyframes agent-blink {
+	0%, 90%, 100% { transform: scaleY(1); }
+	95%           { transform: scaleY(.05); }
+}
+@keyframes agent-think-dart {
+	0%, 100% { transform: translateX(0); }
+	30%      { transform: translateX(1.5px); }
+	60%      { transform: translateX(-1.5px); }
+}
+@keyframes agent-mouth-talk {
+	0%, 100% { transform: scaleY(.3); }
+	50%      { transform: scaleY(1); }
+}
+@keyframes agent-spin-ring {
+	from { transform: rotate(0deg); }
+	to   { transform: rotate(360deg); }
+}
+@keyframes agent-float {
+	0%, 100% { transform: translateY(0); }
+	50%      { transform: translateY(-2px); }
+}
+
+/* ─── Face SVG element ────────────────────────────────────────────────────── */
+
+.agent-face-svg {
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+/* ─── Chat mascot header ──────────────────────────────────────────────────── */
+
+.agent-chat-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.agent-mascot-img {
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	animation: agent-float 3.5s ease-in-out infinite;
+}
+
+.agent-chat-header-name {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+/* ─── Status in header ────────────────────────────────────────────────────── */
+
+.agent-chat-header .agent-chat-status {
+	margin-left: auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	text-align: right;
+	white-space: nowrap;
+}
+
 /* ─── Setup wizard ────────────────────────────────────────────────────────── */
 
 .agent-wizard-modal {
 	width: min(560px, 90vw);
 }
 
-.agent-wizard-emoji {
-	font-size: 2.4em;
-	text-align: left;
+.agent-wizard-mascot {
 	margin: 0 0 12px;
-	line-height: 1;
+}
+
+.agent-wizard-mascot-img {
+	width: 72px;
+	height: 72px;
 }
 
 .agent-wizard-progress {
@@ -235,4 +310,52 @@
 	font-style: italic;
 	margin: 8px 0 0;
 	transition: opacity 0.2s;
+}
+
+/* ─── Wizard textarea settings — stacked full-width layout ───────────────── */
+
+.agent-wizard-modal .setting-item:has(textarea) {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	padding-top: 12px;
+	padding-bottom: 12px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.agent-wizard-modal .setting-item:has(textarea):first-of-type {
+	border-top: none;
+}
+
+.agent-wizard-modal .setting-item:has(textarea) .setting-item-info {
+	width: 100%;
+}
+
+.agent-wizard-modal .setting-item:has(textarea) .setting-item-control {
+	width: 100%;
+}
+
+.agent-wizard-modal .setting-item:has(textarea) textarea {
+	width: 100%;
+	min-height: 80px;
+	resize: vertical;
+}
+
+/* ─── Centered wizard screens (welcome, loading, done) ────────────────────── */
+
+.agent-wizard-centered h2,
+.agent-wizard-centered .agent-wizard-desc,
+.agent-wizard-centered .agent-wizard-loading-status,
+.agent-wizard-centered .agent-wizard-cost {
+	text-align: center;
+}
+
+.agent-wizard-centered .agent-wizard-mascot {
+	display: flex;
+	justify-content: center;
+	margin-bottom: 20px;
+}
+
+.agent-wizard-centered .agent-wizard-nav {
+	justify-content: center;
 }

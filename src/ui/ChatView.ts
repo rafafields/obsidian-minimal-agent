@@ -3,6 +3,7 @@ import type MinimalAgentPlugin from '../main';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { LLMError, type ChatMessage } from '../types';
 import { calcCost, countTokens, formatCost } from '../utils/tokens';
+import { createMascotImg, type MascotState } from './mascot';
 
 export const CHAT_VIEW_TYPE = 'agent-chat';
 
@@ -19,6 +20,7 @@ export class ChatView extends ItemView {
 	private saveChatBtn!: HTMLButtonElement;
 	private statusEl!: HTMLElement;
 	private loadingEl: HTMLElement | null = null;
+	private setMascotState!: (state: MascotState) => void;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -36,6 +38,16 @@ export class ChatView extends ItemView {
 		root.empty();
 		root.addClass('agent-chat-container');
 
+		// — Mascot header —
+		const headerEl = root.createDiv({ cls: 'agent-chat-header' });
+		const { setState } = createMascotImg(headerEl, 'idle');
+		this.setMascotState = setState;
+		headerEl.createDiv({
+			cls: 'agent-chat-header-name',
+			text: this.plugin.settings.agentName || 'Agent',
+		});
+		this.statusEl = headerEl.createDiv({ cls: 'agent-chat-status' });
+
 		this.messagesEl = root.createDiv({ cls: 'agent-chat-messages' });
 
 		const footerEl = root.createDiv({ cls: 'agent-chat-footer' });
@@ -45,10 +57,9 @@ export class ChatView extends ItemView {
 			cls: 'agent-chat-input',
 			attr: { placeholder: 'Message… (Ctrl+Enter to send)', rows: '3' },
 		});
-		this.sendBtn = composerEl.createEl('button', {
-			text: 'Send',
-			cls: 'mod-cta agent-chat-send',
-		});
+		this.sendBtn = composerEl.createEl('button', { cls: 'mod-cta agent-chat-send' });
+		this.sendBtn.createEl('span', { text: '↵', cls: 'agent-chat-send-icon' });
+		this.sendBtn.createEl('span', { text: 'Send', cls: 'agent-chat-send-label' });
 
 		const actionsEl = footerEl.createDiv({ cls: 'agent-chat-actions' });
 		this.finalizeBtn = actionsEl.createEl('button', {
@@ -59,8 +70,6 @@ export class ChatView extends ItemView {
 			text: 'Save conversation',
 			cls: 'agent-chat-save',
 		});
-
-		this.statusEl = footerEl.createDiv({ cls: 'agent-chat-status' });
 
 		this.sendBtn.addEventListener('click', () => { void this.handleSend(); });
 		this.finalizeBtn.addEventListener('click', () => { void this.finalizeSession(); });
@@ -167,7 +176,7 @@ export class ChatView extends ItemView {
 		this.textareaEl.disabled = value;
 		this.finalizeBtn.disabled = value;
 		this.saveChatBtn.disabled = value;
-		this.sendBtn.textContent = 'Send';
+		this.setMascotState(value ? 'thinking' : (this.transcript.length > 0 ? 'blink' : 'idle'));
 	}
 
 	private showLoadingBubble(): void {
@@ -266,6 +275,7 @@ export class ChatView extends ItemView {
 			this.transcript = [];
 			this.messagesEl.empty();
 			this.statusEl.setText('');
+			this.setMascotState('idle');
 		} finally {
 			this.finalizationInProgress = false;
 			this.setProcessing(false);
