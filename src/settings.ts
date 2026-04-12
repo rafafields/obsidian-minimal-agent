@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type MinimalAgentPlugin from './main';
 import type { Importance } from './types';
+import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from './llm/curatedModels';
 
 export interface AgentSettings {
 	agentName: string;
@@ -73,16 +74,70 @@ export class AgentSettingTab extends PluginSettingTab {
 					});
 			});
 
+		// Model selector
+		const isCustom = !findCuratedModel(this.plugin.settings.modelSlug);
+		const dropdownValue = isCustom ? CUSTOM_MODEL_OPTION : this.plugin.settings.modelSlug;
+
+		const modelInfoEl = containerEl.createDiv({ cls: 'agent-model-info' });
+
+		const renderModelInfo = (slug: string) => {
+			modelInfoEl.empty();
+			const model = findCuratedModel(slug);
+			if (!model) return;
+			const priceEl = modelInfoEl.createDiv({ cls: 'agent-model-info__price' });
+			priceEl.createSpan({ text: `Input: $${model.inputPricePerM.toFixed(2)} / 1M · Output: $${model.outputPricePerM.toFixed(2)} / 1M` });
+			if (model.zdr) {
+				priceEl.createSpan({ text: ' · ZDR ✓', cls: 'agent-model-info__zdr' });
+			}
+			modelInfoEl.createDiv({ text: model.description, cls: 'agent-model-info__desc' });
+		};
+
+		// Custom slug field (shown only when "Custom…" is selected)
+		const customFieldEl = containerEl.createDiv({ cls: 'agent-model-custom' });
+		customFieldEl.style.display = isCustom ? '' : 'none';
+		let customInput: HTMLInputElement;
+
 		new Setting(containerEl)
 			.setName('Model')
-			.setDesc('OpenRouter model slug (e.g. qwen/qwen3.5-27b, anthropic/claude-sonnet-4-5).')
-			.addText(text => text
-				.setPlaceholder('qwen/qwen3.5-27b')
-				.setValue(this.plugin.settings.modelSlug)
-				.onChange(async (value) => {
-					this.plugin.settings.modelSlug = value.trim();
-					await this.plugin.saveSettings();
-				}));
+			.setDesc('Select a curated model or choose "Custom…" to enter any OpenRouter slug.')
+			.addDropdown(drop => {
+				for (const m of CURATED_MODELS) {
+					drop.addOption(m.slug, `${m.displayName} (${m.provider})`);
+				}
+				drop.addOption(CUSTOM_MODEL_OPTION, 'Custom…');
+				drop.setValue(dropdownValue);
+				drop.onChange(async (value) => {
+					if (value === CUSTOM_MODEL_OPTION) {
+						customFieldEl.style.display = '';
+						modelInfoEl.empty();
+					} else {
+						customFieldEl.style.display = 'none';
+						this.plugin.settings.modelSlug = value;
+						await this.plugin.saveSettings();
+						renderModelInfo(value);
+					}
+				});
+			});
+
+		// Insert model info and custom field after the Setting row
+		containerEl.appendChild(modelInfoEl);
+		containerEl.appendChild(customFieldEl);
+
+		new Setting(customFieldEl)
+			.setName('Custom model slug')
+			.setDesc('Any valid OpenRouter model ID (e.g. mistralai/mistral-7b-instruct).')
+			.addText(text => {
+				customInput = text.inputEl;
+				text
+					.setPlaceholder('provider/model-name')
+					.setValue(isCustom ? this.plugin.settings.modelSlug : '')
+					.onChange(async (value) => {
+						this.plugin.settings.modelSlug = value.trim();
+						await this.plugin.saveSettings();
+					});
+			});
+
+		if (!isCustom) renderModelInfo(this.plugin.settings.modelSlug);
 
 		// — Context —
 		containerEl.createEl('h3', { text: 'Context' });

@@ -359,3 +359,38 @@
 .agent-wizard-centered .agent-wizard-nav {
 	justify-content: center;
 }
+
+
+/* ─── Model selector (Settings) ───────────────────────────────────────────── */
+
+.agent-model-info {
+	margin: -8px 0 12px 0;
+	padding: 8px 12px;
+	border-left: 3px solid var(--interactive-accent);
+	background: var(--background-secondary);
+	border-radius: 0 4px 4px 0;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+}
+
+.agent-model-info:empty {
+	display: none;
+}
+
+.agent-model-info__price {
+	margin-bottom: 4px;
+	color: var(--text-normal);
+	font-weight: 500;
+}
+
+.agent-model-info__zdr {
+	color: var(--color-green);
+}
+
+.agent-model-info__desc {
+	line-height: 1.4;
+}
+
+.agent-model-custom {
+	margin-bottom: 8px;
+}
