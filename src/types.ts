@@ -1,3 +1,10 @@
+export interface SoulMeta {
+	id: string;
+	name: string;
+	emoji: string;
+	path: string;
+}
+
 export type MemoryState = 'draft' | 'active' | 'stale' | 'archived';
 export type MemoryTier = 'working' | 'semantic';
 export type MemoryKind = 'decision' | 'insight' | 'constraint' | 'risk' | 'summary' | 'pattern';
@@ -43,6 +50,7 @@ export interface ContextAssemblerOptions {
 	tokenBudget: number;
 	episodeDaysBack: number;
 	minImportance: Importance;
+	soulId: string;
 }
 
 export interface MemoryItemFrontmatter {
@@ -59,6 +67,7 @@ export interface MemoryItemFrontmatter {
 	related_to: string[];
 	expires_at: string | null;
 	session_id: string;
+	soul: string;
 	proposed_tags?: string[];
 }
 
@@ -67,8 +76,9 @@ export interface EpisodeFrontmatter {
 	state: 'confirmed';
 	created_at: string;
 	updated_at: string;
-	origin: 'agent';
+	origin: string;
 	session_id: string;
+	soul: string;
 	token_cost: number;
 }
 

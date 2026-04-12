@@ -24,8 +24,9 @@ export class ContextAssembler {
 		let droppedItems = 0;
 
 		// — Layer 1: Bootstrap (always included) —
+		const soulPath = `_agent/souls/${options.soulId}.md`;
 		const bootstrapPaths = [
-			'_agent/soul.md',
+			soulPath,
 			'_agent/user.md',
 			'_agent/taxonomy.md',
 			'_agent/memory/active.md',

@@ -10,11 +10,12 @@ import { TaxonomyManager } from './vault/TaxonomyManager';
 import { MemoryManager } from './memory/MemoryManager';
 import { ContextAssembler } from './context/ContextAssembler';
 import { SessionManager } from './session/SessionManager';
+import { SoulManager } from './souls/SoulManager';
+import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
 import { SetupWizard } from './wizard/SetupWizard';
 import type { MemoryItemFrontmatter } from './types';
 
 const CORE_FILES = [
-	'_agent/soul.md',
 	'_agent/user.md',
 	'_agent/taxonomy.md',
 	'_agent/memory/active.md',
@@ -28,6 +29,7 @@ export default class MinimalAgentPlugin extends Plugin {
 	memoryManager: MemoryManager;
 	contextAssembler: ContextAssembler;
 	sessionManager: SessionManager;
+	soulManager: SoulManager;
 
 	private coreFileContents = new Map<string, string>();
 	private lockIconTimer: number | null = null;
@@ -45,6 +47,7 @@ export default class MinimalAgentPlugin extends Plugin {
 		this.taxonomyManager = new TaxonomyManager(this.vaultManager, this.parser);
 		this.memoryManager = new MemoryManager(this.vaultManager, this.parser);
 		this.contextAssembler = new ContextAssembler(this.vaultManager, this.parser, this.memoryManager);
+		this.soulManager = new SoulManager(this.vaultManager, this.parser);
 		this.sessionManager = new SessionManager(
 			this.vaultManager,
 			this.parser,
@@ -59,6 +62,21 @@ export default class MinimalAgentPlugin extends Plugin {
 			id: 'open-agent-chat',
 			name: 'Open agent chat',
 			callback: () => this.openChatView(),
+		});
+
+		this.addCommand({
+			id: 'create-soul',
+			name: 'Create new soul',
+			callback: () => {
+				new SoulGeneratorModal(
+					this.app,
+					this.vaultManager,
+					this.parser,
+					this.settings.apiKey,
+					this.settings.modelSlug,
+					() => {},
+				).open();
+			},
 		});
 
 		this.addRibbonIcon('message-square', 'Open agent chat', () => this.openChatView());

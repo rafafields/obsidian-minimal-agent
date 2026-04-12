@@ -6,6 +6,8 @@ import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT } from '.
 import { calcCost, formatCost } from '../utils/tokens';
 import type { LLMUsage } from '../types';
 import { createMascotImg, type MascotState } from '../ui/mascot';
+import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
+import { SoulManager } from '../souls/SoulManager';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -53,6 +55,7 @@ type FinishState = 'loading' | 'done' | 'error';
 export class SetupWizard extends Modal {
 	private step = 1;
 	private agentName: string;
+	private soulEmoji = '✨';
 	private apiKey: string;
 	private modelSlug: string;
 	private corePurpose = '';
@@ -74,7 +77,7 @@ export class SetupWizard extends Modal {
 		private vaultManager: VaultManager,
 	) {
 		super(app);
-		this.agentName = plugin.settings.agentName;
+		this.agentName = '';
 		this.apiKey = plugin.settings.apiKey;
 		this.modelSlug = plugin.settings.modelSlug;
 		this.selectedTags = new Set(SUGGESTED_TAGS);
@@ -82,7 +85,7 @@ export class SetupWizard extends Modal {
 	}
 
 	static isFirstRun(app: App): boolean {
-		return app.vault.getAbstractFileByPath('_agent/soul.md') === null;
+		return app.vault.getAbstractFileByPath('_agent/souls') === null;
 	}
 
 	onOpen() {
@@ -170,12 +173,34 @@ export class SetupWizard extends Modal {
 					.onChange(v => { this.apiKey = v.trim(); });
 			});
 
+		const isCustomSlug = !findCuratedModel(this.modelSlug);
+		const customSlugEl = contentEl.createDiv();
+
 		new Setting(contentEl)
 			.setName('Model')
-			.setDesc('OpenRouter model slug (e.g. qwen/qwen3.5-27b, anthropic/claude-sonnet-4-5).')
+			.setDesc('Select a model for soul and user document generation.')
+			.addDropdown(drop => {
+				for (const m of CURATED_MODELS) {
+					drop.addOption(m.slug, `${m.displayName} (${m.provider})`);
+				}
+				drop.addOption(CUSTOM_MODEL_OPTION, 'Custom…');
+				drop.setValue(isCustomSlug ? CUSTOM_MODEL_OPTION : this.modelSlug);
+				drop.onChange(v => {
+					if (v === CUSTOM_MODEL_OPTION) {
+						customSlugEl.style.display = '';
+					} else {
+						this.modelSlug = v;
+						customSlugEl.style.display = 'none';
+					}
+				});
+			});
+
+		customSlugEl.style.display = isCustomSlug ? '' : 'none';
+		new Setting(customSlugEl)
+			.setName('Custom model slug')
 			.addText(text => text
-				.setPlaceholder('qwen/qwen3.5-27b')
-				.setValue(this.modelSlug)
+				.setPlaceholder('provider/model-name')
+				.setValue(isCustomSlug ? this.modelSlug : '')
 				.onChange(v => { this.modelSlug = v.trim(); }));
 
 		this.renderNav(
@@ -191,63 +216,9 @@ export class SetupWizard extends Modal {
 		);
 	}
 
-	// — Step 3: Define agent —
+	// — Step 3: About you —
 
 	private renderStep3() {
-		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'Define your agent' });
-		contentEl.createEl('p', {
-			text: 'These fields generate _agent/soul.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
-			cls: 'agent-wizard-desc',
-		});
-
-		new Setting(contentEl)
-			.setName('Agent name')
-			.setDesc('How the agent will be identified in the chat and interface.')
-			.addText(text => text
-				.setPlaceholder('Agent')
-				.setValue(this.agentName)
-				.onChange(v => { this.agentName = v.trim(); }));
-
-		new Setting(contentEl)
-			.setName('Core purpose')
-			.setDesc('What is this agent fundamentally for? (2–3 sentences)')
-			.addTextArea(ta => {
-				ta.setValue(this.corePurpose)
-					.setPlaceholder('A general-purpose thinking companion for my daily work.')
-					.onChange(v => { this.corePurpose = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		new Setting(contentEl)
-			.setName('Core values')
-			.setDesc('What principles should guide it?')
-			.addTextArea(ta => {
-				ta.setValue(this.coreValues)
-					.setPlaceholder('Honesty, clarity, brevity.')
-					.onChange(v => { this.coreValues = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		new Setting(contentEl)
-			.setName('Voice and tone')
-			.setDesc('How should it communicate?')
-			.addTextArea(ta => {
-				ta.setValue(this.voiceTone)
-					.setPlaceholder('Direct and concise. No filler. No hedging.')
-					.onChange(v => { this.voiceTone = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		this.renderNav(
-			() => { this.step = 2; this.render(); },
-			() => { this.step = 4; this.render(); },
-		);
-	}
-
-	// — Step 4: About you —
-
-	private renderStep4() {
 		const { contentEl } = this;
 		contentEl.createEl('h2', { text: 'About you' });
 		contentEl.createEl('p', {
@@ -282,6 +253,68 @@ export class SetupWizard extends Modal {
 				ta.setValue(this.interests)
 					.setPlaceholder('Building an Obsidian plugin, learning TypeScript.')
 					.onChange(v => { this.interests = v; });
+				ta.inputEl.rows = 3;
+			});
+
+		this.renderNav(
+			() => { this.step = 2; this.render(); },
+			() => { this.step = 4; this.render(); },
+		);
+	}
+
+	// — Step 4: Define agent —
+
+	private renderStep4() {
+		const { contentEl } = this;
+		contentEl.createEl('h2', { text: 'Define your agent' });
+		contentEl.createEl('p', {
+			text: 'These fields generate _agent/souls/default.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
+			cls: 'agent-wizard-desc',
+		});
+
+		new Setting(contentEl)
+			.setName('Agent name')
+			.setDesc('How the agent will be identified in the chat and interface.')
+			.addText(text => text
+				.setPlaceholder('Agent')
+				.setValue(this.agentName)
+				.onChange(v => { this.agentName = v.trim(); }));
+
+		new Setting(contentEl)
+			.setName('Soul emoji')
+			.setDesc('Single emoji shown in the soul selector.')
+			.addText(text => text
+				.setPlaceholder('✨')
+				.setValue(this.soulEmoji)
+				.onChange(v => { this.soulEmoji = v.trim() || '✨'; }));
+
+		new Setting(contentEl)
+			.setName('Core purpose')
+			.setDesc('What is this agent fundamentally for? (2–3 sentences)')
+			.addTextArea(ta => {
+				ta.setValue(this.corePurpose)
+					.setPlaceholder('A general-purpose thinking companion for my daily work.')
+					.onChange(v => { this.corePurpose = v; });
+				ta.inputEl.rows = 3;
+			});
+
+		new Setting(contentEl)
+			.setName('Core values')
+			.setDesc('What principles should guide it?')
+			.addTextArea(ta => {
+				ta.setValue(this.coreValues)
+					.setPlaceholder('Honesty, clarity, brevity.')
+					.onChange(v => { this.coreValues = v; });
+				ta.inputEl.rows = 3;
+			});
+
+		new Setting(contentEl)
+			.setName('Voice and tone')
+			.setDesc('How should it communicate?')
+			.addTextArea(ta => {
+				ta.setValue(this.voiceTone)
+					.setPlaceholder('Direct and concise. No filler. No hedging.')
+					.onChange(v => { this.voiceTone = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -426,15 +459,12 @@ export class SetupWizard extends Modal {
 		);
 
 		const userMessage = [
+			`Language: Write the entire document in ${this.language}.`,
+			'',
 			`Agent name: ${this.agentName || 'Agent'}`,
-			'',
-			`Core purpose: ${this.corePurpose}`,
-			'',
-			`Core values: ${this.coreValues}`,
-			'',
-			`Voice and tone: ${this.voiceTone}`,
-			'',
-			`Write the entire document in ${this.language}.`,
+			`Core purpose: ${this.corePurpose || 'Not specified.'}`,
+			`Core values: ${this.coreValues || 'Not specified.'}`,
+			`Voice and tone: ${this.voiceTone || 'Not specified.'}`,
 		].join('\n');
 
 		const { content, usage } = await client.chat([
@@ -451,13 +481,11 @@ export class SetupWizard extends Modal {
 		);
 
 		const userMessage = [
+			`Language: Write the entire document in ${this.language}.`,
+			'',
 			`Work style: ${this.workStyle || 'Not provided.'}`,
-			'',
 			`Communication preferences: ${this.commPreferences || 'Not provided.'}`,
-			'',
 			`Current areas of focus: ${this.interests || 'Not provided.'}`,
-			'',
-			`Write the entire document in ${this.language}.`,
 		].join('\n');
 
 		const { content, usage } = await client.chat([
@@ -504,17 +532,6 @@ export class SetupWizard extends Modal {
 		// Kick off pricing fetch concurrently — it must not block generation
 		const pricingPromise = this.plugin.getModelPricing().catch(() => null);
 
-		this.updateLoadingStatus('Generating soul.md…');
-		let soulBody: string;
-		let soulUsage: import('../types').LLMUsage | null = null;
-		try {
-			const result = soulFormHasContent ? await this.generateSoul() : null;
-			soulBody = result?.body ?? SOUL_FALLBACK;
-			soulUsage = result?.usage ?? null;
-		} catch {
-			soulBody = SOUL_FALLBACK;
-		}
-
 		this.updateLoadingStatus('Generating user.md…');
 		let userBody: string;
 		let userUsage: import('../types').LLMUsage | null = null;
@@ -522,8 +539,23 @@ export class SetupWizard extends Modal {
 			const result = userFormHasContent ? await this.generateUser() : null;
 			userBody = result?.body ?? this.userFallback();
 			userUsage = result?.usage ?? null;
-		} catch {
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`User document generation failed: ${msg}. Using form input as fallback.`);
 			userBody = this.userFallback();
+		}
+
+		this.updateLoadingStatus('Generating soul…');
+		let soulBody: string;
+		let soulUsage: import('../types').LLMUsage | null = null;
+		try {
+			const result = soulFormHasContent ? await this.generateSoul() : null;
+			soulBody = result?.body ?? SOUL_FALLBACK;
+			soulUsage = result?.usage ?? null;
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`Soul generation failed: ${msg}. Using fallback soul.`);
+			soulBody = SOUL_FALLBACK;
 		}
 
 		this.updateLoadingStatus('Writing vault files…');
@@ -546,20 +578,23 @@ export class SetupWizard extends Modal {
 			const date = now.toISOString().slice(0, 10);
 			const datetime = now.toISOString().slice(0, 16);
 
-			this.plugin.settings.agentName = this.agentName || 'Agent';
+			const soulId = SoulManager.nameToId(this.agentName || 'Agent');
 			this.plugin.settings.apiKey = this.apiKey;
 			this.plugin.settings.modelSlug = this.modelSlug || 'qwen/qwen3.5-27b';
+			this.plugin.settings.defaultSoul = soulId;
 			await this.plugin.saveSettings();
 
+			await this.vaultManager.ensurePath('_agent/souls');
 			await this.vaultManager.ensurePath('_agent/memory/episodes');
 			await this.vaultManager.ensurePath('_agent/memory/items/_pending');
 			await this.vaultManager.ensurePath('_system/traces');
 
-			await this.vaultManager.writeFile('_agent/soul.md', [
+			await this.vaultManager.writeFile(`_agent/souls/${soulId}.md`, [
 				'---',
+				`name: "${this.agentName || 'Agent'}"`,
+				`emoji: ${this.soulEmoji}`,
 				'kind: agent_soul',
 				'state: active',
-				`agent_name: "${this.agentName || 'Agent'}"`,
 				`created_at: ${date}`,
 				`updated_at: ${date}`,
 				'origin: hybrid',

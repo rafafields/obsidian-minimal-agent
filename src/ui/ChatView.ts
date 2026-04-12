@@ -4,11 +4,15 @@ import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { LLMError, type ChatMessage } from '../types';
 import { calcCost, countTokens, formatCost } from '../utils/tokens';
 import { createMascotImg, type MascotState } from './mascot';
+import { SoulGeneratorModal } from '../souls/SoulGeneratorModal';
 
 export const CHAT_VIEW_TYPE = 'agent-chat';
 
 export class ChatView extends ItemView {
 	private transcript: ChatMessage[] = [];
+	private activeSoulId: string;
+	private soulDisplayName = 'Agent';
+	private headerNameEl!: HTMLElement;
 	private idleTimer: number | null = null;
 	private isProcessing = false;
 	private finalizationInProgress = false;
@@ -27,10 +31,11 @@ export class ChatView extends ItemView {
 		private plugin: MinimalAgentPlugin,
 	) {
 		super(leaf);
+		this.activeSoulId = plugin.settings.defaultSoul || 'default';
 	}
 
 	getViewType(): string { return CHAT_VIEW_TYPE; }
-	getDisplayText(): string { return this.plugin.settings.agentName || 'Agent'; }
+	getDisplayText(): string { return this.soulDisplayName; }
 	getIcon(): string { return 'message-square'; }
 
 	async onOpen(): Promise<void> {
@@ -42,10 +47,30 @@ export class ChatView extends ItemView {
 		const headerEl = root.createDiv({ cls: 'agent-chat-header' });
 		const { setState } = createMascotImg(headerEl, 'idle');
 		this.setMascotState = setState;
-		headerEl.createDiv({
-			cls: 'agent-chat-header-name',
-			text: this.plugin.settings.agentName || 'Agent',
+		this.headerNameEl = headerEl.createDiv({ cls: 'agent-chat-header-name', text: this.soulDisplayName });
+
+		// Soul selector
+		const soulWrapEl = headerEl.createDiv({ cls: 'agent-soul-selector-wrap' });
+		const soulSelectEl = soulWrapEl.createEl('select', { cls: 'agent-soul-selector' });
+		soulSelectEl.createEl('option', { text: `✨ ${this.activeSoulId}`, value: this.activeSoulId });
+		soulSelectEl.addEventListener('change', () => {
+			this.activeSoulId = soulSelectEl.value;
 		});
+
+		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: 'Create new soul' } });
+		soulAddBtn.addEventListener('click', () => {
+			new SoulGeneratorModal(
+				this.app,
+				this.plugin.vaultManager,
+				this.plugin.parser,
+				this.plugin.settings.apiKey,
+				this.plugin.settings.modelSlug,
+				(id) => { void this.refreshSoulSelector(soulSelectEl, id); },
+			).open();
+		});
+
+		void this.refreshSoulSelector(soulSelectEl, null);
+
 		this.statusEl = headerEl.createDiv({ cls: 'agent-chat-status' });
 
 		this.messagesEl = root.createDiv({ cls: 'agent-chat-messages' });
@@ -86,6 +111,30 @@ export class ChatView extends ItemView {
 		this.clearIdleTimer();
 	}
 
+	// — Soul selector —
+
+	private async refreshSoulSelector(selectEl: HTMLSelectElement, selectId: string | null): Promise<void> {
+		const souls = await this.plugin.soulManager.listSouls();
+		selectEl.empty();
+		if (souls.length === 0) {
+			selectEl.createEl('option', { text: '✨ Agent', value: 'default' });
+			return;
+		}
+		for (const s of souls) {
+			selectEl.createEl('option', { text: `${s.emoji} ${s.name}`, value: s.id });
+		}
+		const target = selectId ?? this.activeSoulId;
+		const exists = souls.some(s => s.id === target);
+		selectEl.value = exists ? target : (souls[0]?.id ?? 'default');
+		this.activeSoulId = selectEl.value;
+
+		const activeSoul = souls.find(s => s.id === this.activeSoulId);
+		if (activeSoul) {
+			this.soulDisplayName = activeSoul.name;
+			this.headerNameEl.setText(activeSoul.name);
+		}
+	}
+
 	// — Send flow —
 
 	private async handleSend(): Promise<void> {
@@ -106,6 +155,7 @@ export class ChatView extends ItemView {
 				tokenBudget: this.plugin.settings.contextTokenBudget,
 				episodeDaysBack: this.plugin.settings.episodeDaysBack,
 				minImportance: this.plugin.settings.minImportanceForContext,
+				soulId: this.activeSoulId,
 			});
 
 			const systemPrompt = result.blocks
@@ -180,10 +230,9 @@ export class ChatView extends ItemView {
 	}
 
 	private showLoadingBubble(): void {
-		const agentName = this.plugin.settings.agentName || 'Agent';
 		this.loadingEl = this.messagesEl.createDiv({ cls: 'agent-message agent-message--agent' });
 		const contentEl = this.loadingEl.createDiv({ cls: 'agent-message-content agent-message-loading' });
-		contentEl.setText(`${agentName} is thinking…`);
+		contentEl.setText(`${this.soulDisplayName} is thinking…`);
 		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
 	}
 
@@ -241,14 +290,13 @@ export class ChatView extends ItemView {
 		const fileTime = timeParts.replace(':', '-');       // HH-MM (safe for filenames)
 		const displayTime = timeParts;                      // HH:MM (for display)
 
-		const agentName = this.plugin.settings.agentName || 'Agent';
 		const lines: string[] = [
 			`# Chat · ${date} ${displayTime}`,
 			'',
 		];
 
 		for (const msg of this.transcript) {
-			const speaker = msg.role === 'user' ? 'You' : agentName;
+			const speaker = msg.role === 'user' ? 'You' : this.soulDisplayName;
 			lines.push(`**${speaker}**`, '', msg.content.trim(), '', '---', '');
 		}
 
@@ -271,7 +319,7 @@ export class ChatView extends ItemView {
 		this.setProcessing(true);
 
 		try {
-			await this.plugin.sessionManager.finalizeSession(this.transcript);
+			await this.plugin.sessionManager.finalizeSession(this.transcript, this.activeSoulId, this.soulDisplayName);
 			this.transcript = [];
 			this.messagesEl.empty();
 			this.statusEl.setText('');

@@ -2,9 +2,10 @@ import { App, PluginSettingTab, Setting } from 'obsidian';
 import type MinimalAgentPlugin from './main';
 import type { Importance } from './types';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from './llm/curatedModels';
+import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
 
 export interface AgentSettings {
-	agentName: string;
+	defaultSoul: string;
 	apiKey: string;
 	modelSlug: string;
 	contextTokenBudget: number;
@@ -17,7 +18,7 @@ export interface AgentSettings {
 }
 
 export const DEFAULT_SETTINGS: AgentSettings = {
-	agentName: 'Agent',
+	defaultSoul: 'default',
 	apiKey: '',
 	modelSlug: 'qwen/qwen3.5-27b',
 	contextTokenBudget: 8000,
@@ -41,19 +42,70 @@ export class AgentSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		// — Agent —
-		containerEl.createEl('h3', { text: 'Agent' });
+		// — Souls —
+		containerEl.createEl('h3', { text: 'Souls' });
 
-		new Setting(containerEl)
-			.setName('Agent name')
-			.setDesc('Name displayed in the chat panel and loading indicator.')
-			.addText(text => text
-				.setPlaceholder('Agent')
-				.setValue(this.plugin.settings.agentName)
-				.onChange(async (value) => {
-					this.plugin.settings.agentName = value.trim() || 'Agent';
+		// Soul selector — populated async
+		let soulDropdown: HTMLSelectElement | null = null;
+
+		const soulSetting = new Setting(containerEl)
+			.setName('Default soul')
+			.setDesc('Soul loaded at the start of every new conversation.')
+			.addDropdown(drop => {
+				soulDropdown = drop.selectEl;
+				drop.addOption(this.plugin.settings.defaultSoul, `Loading… (${this.plugin.settings.defaultSoul})`);
+				drop.setValue(this.plugin.settings.defaultSoul);
+				drop.onChange(async (value) => {
+					this.plugin.settings.defaultSoul = value;
 					await this.plugin.saveSettings();
-				}));
+				});
+			})
+			.addButton(btn => {
+				btn.setButtonText('Create new soul').onClick(() => {
+					new SoulGeneratorModal(
+						this.app,
+						this.plugin.vaultManager,
+						this.plugin.parser,
+						this.plugin.settings.apiKey,
+						this.plugin.settings.modelSlug,
+						(id) => {
+							// Refresh the dropdown after creation
+							void this.plugin.soulManager.listSouls().then(souls => {
+								if (!soulDropdown) return;
+								soulDropdown.empty();
+								for (const s of souls) {
+									const opt = soulDropdown.createEl('option', {
+										text: `${s.emoji} ${s.name}`,
+										value: s.id,
+									});
+									if (s.id === id) opt.selected = true;
+								}
+								this.plugin.settings.defaultSoul = id;
+								void this.plugin.saveSettings();
+							});
+						},
+					).open();
+				});
+			});
+		void soulSetting; // suppress unused warning
+
+		// Async populate the soul dropdown
+		void this.plugin.soulManager.listSouls().then(souls => {
+			if (!soulDropdown) return;
+			const currentValue = this.plugin.settings.defaultSoul;
+			soulDropdown.empty();
+			if (souls.length === 0) {
+				soulDropdown.createEl('option', { text: 'No souls found — create one', value: '' });
+				return;
+			}
+			for (const s of souls) {
+				const opt = soulDropdown.createEl('option', {
+					text: `${s.emoji} ${s.name}`,
+					value: s.id,
+				});
+				if (s.id === currentValue) opt.selected = true;
+			}
+		});
 
 		// — API —
 		containerEl.createEl('h3', { text: 'API' });
@@ -162,6 +214,7 @@ export class AgentSettingTab extends PluginSettingTab {
 			tokenBudget: this.plugin.settings.contextTokenBudget,
 			episodeDaysBack: this.plugin.settings.episodeDaysBack,
 			minImportance: this.plugin.settings.minImportanceForContext,
+			soulId: this.plugin.settings.defaultSoul || 'default',
 		}).then(result => {
 			const budget = this.plugin.settings.contextTokenBudget;
 			const used = result.totalTokens;

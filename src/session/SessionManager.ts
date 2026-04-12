@@ -17,7 +17,7 @@ export class SessionManager {
 		private getModelSlug: () => string,
 	) {}
 
-	async finalizeSession(transcript: ChatMessage[]): Promise<void> {
+	async finalizeSession(transcript: ChatMessage[], soulId: string, soulName: string): Promise<void> {
 		if (transcript.length === 0) return;
 
 		const now = new Date();
@@ -42,11 +42,11 @@ export class SessionManager {
 		}
 
 		// Write episode
-		await this.writeEpisode(episodePath, sessionId, datetime, transcript, candidates);
+		await this.writeEpisode(episodePath, sessionId, datetime, soulId, soulName, transcript, candidates);
 
 		// Write memory candidates to _pending/
 		for (const candidate of candidates) {
-			await this.writePendingItem(candidate, sessionId, datetime);
+			await this.writePendingItem(candidate, sessionId, datetime, soulId);
 		}
 
 		// Write trace
@@ -69,6 +69,8 @@ export class SessionManager {
 		episodePath: string,
 		sessionId: string,
 		datetime: string,
+		soulId: string,
+		soulName: string,
 		transcript: ChatMessage[],
 		candidates: MemoryItemCandidate[],
 	): Promise<void> {
@@ -113,8 +115,9 @@ export class SessionManager {
 			state: 'confirmed',
 			created_at: datetime,
 			updated_at: datetime,
-			origin: 'agent',
+			origin: `[[${soulName}]]`,
 			session_id: sessionId,
+			soul: soulId,
 			token_cost: tokenCost,
 		};
 		await this.vaultManager.writeFile(episodePath, this.parser.serialize(fm, sessionBlock));
@@ -126,6 +129,7 @@ export class SessionManager {
 		candidate: MemoryItemCandidate,
 		sessionId: string,
 		datetime: string,
+		soulId: string,
 	): Promise<void> {
 		const filename = this.sanitizeFilename(candidate.title);
 		const path = `_agent/memory/items/_pending/${filename}.md`;
@@ -145,6 +149,7 @@ export class SessionManager {
 			related_to: [],
 			expires_at: candidate.expires_at,
 			session_id: sessionId,
+			soul: soulId,
 		};
 
 		const body = [

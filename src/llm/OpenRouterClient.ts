@@ -31,62 +31,78 @@ export class OpenRouterClient {
 	constructor(private apiKey: string, private modelSlug: string) {}
 
 	async chat(messages: ChatMessage[], options?: { temperature?: number }): Promise<LLMResponse> {
-		let response: Response;
+		const MAX_RETRIES = 3;
+		const BASE_DELAY_MS = 2000;
 
-		try {
-			response = await fetch(`${OpenRouterClient.BASE}/chat/completions`, {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${this.apiKey}`,
-					'Content-Type': 'application/json',
-					'HTTP-Referer': 'obsidian://minimal-agent',
-					'X-Title': 'Minimal Agent',
-				},
-				body: JSON.stringify({
-					model: this.modelSlug,
-					messages,
-					temperature: options?.temperature ?? 0.7,
-				}),
-			});
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			throw new LLMError(`Network error: ${msg}`, 0, '');
-		}
+		for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+			let response: Response;
 
-		const rawBody = await response.text();
-
-		if (!response.ok) {
-			let errorMessage = `API error ${response.status}`;
 			try {
-				const parsed = JSON.parse(rawBody) as { error?: { message?: string } };
-				if (parsed.error?.message) {
-					errorMessage = `${response.status}: ${parsed.error.message}`;
-				}
-			} catch {
-				// keep generic message
+				response = await fetch(`${OpenRouterClient.BASE}/chat/completions`, {
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${this.apiKey}`,
+						'Content-Type': 'application/json',
+						'HTTP-Referer': 'obsidian://minimal-agent',
+						'X-Title': 'Minimal Agent',
+					},
+					body: JSON.stringify({
+						model: this.modelSlug,
+						messages,
+						temperature: options?.temperature ?? 0.7,
+					}),
+				});
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				throw new LLMError(`Network error: ${msg}`, 0, '');
 			}
-			throw new LLMError(errorMessage, response.status, rawBody);
+
+			const rawBody = await response.text();
+
+			if (response.status === 429 && attempt < MAX_RETRIES) {
+				const retryAfter = response.headers.get('Retry-After');
+				const delayMs = retryAfter
+					? parseFloat(retryAfter) * 1000
+					: BASE_DELAY_MS * Math.pow(2, attempt);
+				await new Promise(resolve => window.setTimeout(resolve, delayMs));
+				continue;
+			}
+
+			if (!response.ok) {
+				let errorMessage = `API error ${response.status}`;
+				try {
+					const parsed = JSON.parse(rawBody) as { error?: { message?: string } };
+					if (parsed.error?.message) {
+						errorMessage = `${response.status}: ${parsed.error.message}`;
+					}
+				} catch {
+					// keep generic message
+				}
+				throw new LLMError(errorMessage, response.status, rawBody);
+			}
+
+			let parsed: OpenRouterChatResponse;
+			try {
+				parsed = JSON.parse(rawBody) as OpenRouterChatResponse;
+			} catch {
+				throw new LLMError('Invalid JSON in API response', response.status, rawBody);
+			}
+
+			const content = parsed.choices?.[0]?.message?.content;
+			if (content === undefined || content === null) {
+				throw new LLMError('Empty response from API', response.status, rawBody);
+			}
+
+			return {
+				content,
+				usage: {
+					promptTokens: parsed.usage?.prompt_tokens ?? 0,
+					completionTokens: parsed.usage?.completion_tokens ?? 0,
+				},
+			};
 		}
 
-		let parsed: OpenRouterChatResponse;
-		try {
-			parsed = JSON.parse(rawBody) as OpenRouterChatResponse;
-		} catch {
-			throw new LLMError('Invalid JSON in API response', response.status, rawBody);
-		}
-
-		const content = parsed.choices?.[0]?.message?.content;
-		if (content === undefined || content === null) {
-			throw new LLMError('Empty response from API', response.status, rawBody);
-		}
-
-		return {
-			content,
-			usage: {
-				promptTokens: parsed.usage?.prompt_tokens ?? 0,
-				completionTokens: parsed.usage?.completion_tokens ?? 0,
-			},
-		};
+		throw new LLMError('Rate limit exceeded after retries', 429, '');
 	}
 
 	static async fetchPricing(modelSlug: string, apiKey: string): Promise<ModelPricing> {
