@@ -5,28 +5,7 @@ import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK } from '../wizard/soulInstructions';
 import { createMascotImg } from '../ui/mascot';
 import { SoulManager } from './SoulManager';
-
-const LANGUAGES: Record<string, string> = {
-	'English':   'English',
-	'Español':   'Español',
-	'Français':  'Français',
-	'Deutsch':   'Deutsch',
-	'Português': 'Português',
-	'Italiano':  'Italiano',
-	'中文':       '中文',
-	'日本語':     '日本語',
-	'한국어':     '한국어',
-};
-
-const LOCALE_MAP: Record<string, string> = {
-	es: 'Español', fr: 'Français', de: 'Deutsch',
-	pt: 'Português', it: 'Italiano', zh: '中文', ja: '日本語', ko: '한국어',
-};
-
-function detectDefaultLanguage(): string {
-	const code = window.navigator.language?.split('-')[0] ?? 'en';
-	return LOCALE_MAP[code] ?? 'English';
-}
+import { LANGUAGES, detectDefaultLanguage } from '../utils/language';
 
 type GenState = 'form' | 'generating' | 'done' | 'error';
 
@@ -49,8 +28,10 @@ export class SoulGeneratorModal extends Modal {
 		private apiKey: string,
 		private modelSlug: string,
 		private onComplete: (id: string) => void,
+		initialLanguage?: string,
 	) {
 		super(app);
+		if (initialLanguage) this.language = initialLanguage;
 	}
 
 	onOpen() {

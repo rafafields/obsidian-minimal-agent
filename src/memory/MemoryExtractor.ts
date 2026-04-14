@@ -12,7 +12,7 @@ Only extract what will still be relevant in 4 weeks.
 
 Output format: JSON array. Write nothing outside the JSON.`;
 
-function buildUserPrompt(taxonomy: string, transcript: string): string {
+function buildUserPrompt(taxonomy: string, transcript: string, language: string): string {
 	return `## Agent configuration
 
 ### Authorized tag taxonomy
@@ -25,6 +25,7 @@ ${transcript}
 ## Instruction
 
 Analyze the session and extract between 0 and 5 memory_item candidates.
+Write all text fields (what, implication, title) in ${language}.
 
 For each candidate return a JSON object with exactly these fields:
 {
@@ -95,6 +96,7 @@ export class MemoryExtractor {
 		taxonomy: string,
 		apiKey: string,
 		modelSlug: string,
+		language = 'English',
 	): Promise<MemoryItemCandidate[]> {
 		const compressed = this.compressTranscript(transcript);
 		const transcriptText = formatTranscriptForPrompt(compressed);
@@ -106,7 +108,7 @@ export class MemoryExtractor {
 			const result = await client.chat(
 				[
 					{ role: 'system', content: SYSTEM_PROMPT },
-					{ role: 'user', content: buildUserPrompt(taxonomy, transcriptText) },
+					{ role: 'user', content: buildUserPrompt(taxonomy, transcriptText, language) },
 				],
 				{ temperature: 0 },
 			);

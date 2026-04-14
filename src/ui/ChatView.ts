@@ -1,7 +1,7 @@
 import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from 'obsidian';
 import type MinimalAgentPlugin from '../main';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
-import { LLMError, type ChatMessage } from '../types';
+import { LLMError, type ChatMessage, type SoulMeta } from '../types';
 import { calcCost, countTokens, formatCost } from '../utils/tokens';
 import { createMascotImg, type MascotState } from './mascot';
 import { SoulGeneratorModal } from '../souls/SoulGeneratorModal';
@@ -12,11 +12,15 @@ export class ChatView extends ItemView {
 	private transcript: ChatMessage[] = [];
 	private activeSoulId: string;
 	private soulDisplayName = 'Agent';
+	private soulsCache: SoulMeta[] = [];
 	private headerNameEl!: HTMLElement;
 	private idleTimer: number | null = null;
 	private isProcessing = false;
 	private finalizationInProgress = false;
 
+	private chatEl!: HTMLElement;
+	private finalizingEl!: HTMLElement;
+	private finalizingStatusEl!: HTMLElement;
 	private messagesEl!: HTMLElement;
 	private textareaEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
@@ -43,8 +47,19 @@ export class ChatView extends ItemView {
 		root.empty();
 		root.addClass('agent-chat-container');
 
+		// — Finalizing loading screen (hidden by default) —
+		this.finalizingEl = root.createDiv({ cls: 'agent-finalizing' });
+		this.finalizingEl.hide();
+		const { setState: setFinalizingMascot } = createMascotImg(this.finalizingEl, 'thinking');
+		void setFinalizingMascot; // keep reference but mascot animates on its own
+		this.finalizingEl.createDiv({ cls: 'agent-finalizing-title', text: 'Saving session…' });
+		this.finalizingStatusEl = this.finalizingEl.createDiv({ cls: 'agent-finalizing-status', text: 'Extracting memories…' });
+
+		// — Main chat wrapper —
+		this.chatEl = root.createDiv({ cls: 'agent-chat-body' });
+
 		// — Mascot header —
-		const headerEl = root.createDiv({ cls: 'agent-chat-header' });
+		const headerEl = this.chatEl.createDiv({ cls: 'agent-chat-header' });
 		const { setState } = createMascotImg(headerEl, 'idle');
 		this.setMascotState = setState;
 		this.headerNameEl = headerEl.createDiv({ cls: 'agent-chat-header-name', text: this.soulDisplayName });
@@ -55,6 +70,11 @@ export class ChatView extends ItemView {
 		soulSelectEl.createEl('option', { text: `✨ ${this.activeSoulId}`, value: this.activeSoulId });
 		soulSelectEl.addEventListener('change', () => {
 			this.activeSoulId = soulSelectEl.value;
+			const soul = this.soulsCache.find(s => s.id === this.activeSoulId);
+			if (soul) {
+				this.soulDisplayName = soul.name;
+				this.headerNameEl.setText(soul.name);
+				}
 		});
 
 		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: 'Create new soul' } });
@@ -66,6 +86,7 @@ export class ChatView extends ItemView {
 				this.plugin.settings.apiKey,
 				this.plugin.settings.modelSlug,
 				(id) => { void this.refreshSoulSelector(soulSelectEl, id); },
+				this.plugin.settings.language,
 			).open();
 		});
 
@@ -73,9 +94,9 @@ export class ChatView extends ItemView {
 
 		this.statusEl = headerEl.createDiv({ cls: 'agent-chat-status' });
 
-		this.messagesEl = root.createDiv({ cls: 'agent-chat-messages' });
+		this.messagesEl = this.chatEl.createDiv({ cls: 'agent-chat-messages' });
 
-		const footerEl = root.createDiv({ cls: 'agent-chat-footer' });
+		const footerEl = this.chatEl.createDiv({ cls: 'agent-chat-footer' });
 
 		const composerEl = footerEl.createDiv({ cls: 'agent-chat-composer' });
 		this.textareaEl = composerEl.createEl('textarea', {
@@ -115,6 +136,7 @@ export class ChatView extends ItemView {
 
 	private async refreshSoulSelector(selectEl: HTMLSelectElement, selectId: string | null): Promise<void> {
 		const souls = await this.plugin.soulManager.listSouls();
+		this.soulsCache = souls;
 		selectEl.empty();
 		if (souls.length === 0) {
 			selectEl.createEl('option', { text: '✨ Agent', value: 'default' });
@@ -158,9 +180,11 @@ export class ChatView extends ItemView {
 				soulId: this.activeSoulId,
 			});
 
+			const language = this.plugin.settings.language;
 			const systemPrompt = result.blocks
 				.map(b => `<!-- ${b.filePath} -->\n${b.content}`)
-				.join('\n\n---\n\n');
+				.join('\n\n---\n\n')
+				+ `\n\n---\n\nAlways respond in ${language}.`;
 
 			const messages: ChatMessage[] = [
 				{ role: 'system', content: systemPrompt },
@@ -316,7 +340,9 @@ export class ChatView extends ItemView {
 		if (this.transcript.length === 0 || this.finalizationInProgress) return;
 		this.finalizationInProgress = true;
 		this.clearIdleTimer();
-		this.setProcessing(true);
+
+		this.chatEl.hide();
+		this.finalizingEl.show();
 
 		try {
 			await this.plugin.sessionManager.finalizeSession(this.transcript, this.activeSoulId, this.soulDisplayName);
@@ -326,7 +352,8 @@ export class ChatView extends ItemView {
 			this.setMascotState('idle');
 		} finally {
 			this.finalizationInProgress = false;
-			this.setProcessing(false);
+			this.finalizingEl.hide();
+			this.chatEl.show();
 		}
 	}
 

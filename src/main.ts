@@ -54,6 +54,7 @@ export default class MinimalAgentPlugin extends Plugin {
 			this.taxonomyManager,
 			() => this.settings.apiKey,
 			() => this.settings.modelSlug,
+			() => this.settings.language,
 		);
 
 		this.registerView(CHAT_VIEW_TYPE, (leaf) => new ChatView(leaf, this));
@@ -75,6 +76,7 @@ export default class MinimalAgentPlugin extends Plugin {
 					this.settings.apiKey,
 					this.settings.modelSlug,
 					() => {},
+					this.settings.language,
 				).open();
 			},
 		});

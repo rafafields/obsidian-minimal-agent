@@ -8,6 +8,7 @@ import type { LLMUsage } from '../types';
 import { createMascotImg, type MascotState } from '../ui/mascot';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
 import { SoulManager } from '../souls/SoulManager';
+import { LANGUAGES, detectDefaultLanguage } from '../utils/language';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -22,33 +23,6 @@ const SUGGESTED_TAGS = [
 
 const TOTAL_STEPS = 5;
 
-const LANGUAGES: Record<string, string> = {
-	'English':   'English',
-	'Español':   'Español',
-	'Français':  'Français',
-	'Deutsch':   'Deutsch',
-	'Português': 'Português',
-	'Italiano':  'Italiano',
-	'中文':       '中文',
-	'日本語':     '日本語',
-	'한국어':     '한국어',
-};
-
-const LOCALE_MAP: Record<string, string> = {
-	es: 'Español',
-	fr: 'Français',
-	de: 'Deutsch',
-	pt: 'Português',
-	it: 'Italiano',
-	zh: '中文',
-	ja: '日本語',
-	ko: '한국어',
-};
-
-function detectDefaultLanguage(): string {
-	const code = window.navigator.language?.split('-')[0] ?? 'en';
-	return LOCALE_MAP[code] ?? 'English';
-}
 
 type FinishState = 'loading' | 'done' | 'error';
 
@@ -81,7 +55,7 @@ export class SetupWizard extends Modal {
 		this.apiKey = plugin.settings.apiKey;
 		this.modelSlug = plugin.settings.modelSlug;
 		this.selectedTags = new Set(SUGGESTED_TAGS);
-		this.language = detectDefaultLanguage();
+		this.language = plugin.settings.language || detectDefaultLanguage();
 	}
 
 	static isFirstRun(app: App): boolean {
@@ -146,7 +120,11 @@ export class SetupWizard extends Modal {
 				for (const lang of Object.keys(LANGUAGES)) {
 					dd.addOption(lang, lang);
 				}
-				dd.setValue(this.language).onChange(v => { this.language = v; });
+				dd.setValue(this.language).onChange(v => {
+					this.language = v;
+					this.plugin.settings.language = v;
+					void this.plugin.saveSettings();
+				});
 			});
 
 		this.renderNav(null, () => { this.step = 2; this.render(); }, 'Get started');

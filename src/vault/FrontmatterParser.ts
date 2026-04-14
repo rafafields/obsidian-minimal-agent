@@ -47,7 +47,7 @@ export class FrontmatterParser {
 					for (const item of value) {
 						const str = String(item);
 						// Quote values that start with # (YAML comment char) or contain special chars
-						if (str.startsWith('#') || str.includes(':') || str.includes('"')) {
+						if (str.startsWith('#') || str.startsWith('[') || str.includes(':') || str.includes('"')) {
 							lines.push(`  - "${str.replace(/"/g, '\\"')}"`);
 						} else {
 							lines.push(`  - ${str}`);
@@ -60,7 +60,7 @@ export class FrontmatterParser {
 				lines.push(`${key}: ${value}`);
 			} else {
 				const str = String(value);
-				if (str.startsWith('#') || str.includes(':') || str.includes('"')) {
+				if (str.startsWith('#') || str.startsWith('[') || str.includes(':') || str.includes('"')) {
 					lines.push(`${key}: "${str.replace(/"/g, '\\"')}"`);
 				} else {
 					lines.push(`${key}: ${str}`);

@@ -15,6 +15,7 @@ export class SessionManager {
 		private taxonomyManager: TaxonomyManager,
 		private getApiKey: () => string,
 		private getModelSlug: () => string,
+		private getLanguage: () => string,
 	) {}
 
 	async finalizeSession(transcript: ChatMessage[], soulId: string, soulName: string): Promise<void> {
@@ -36,6 +37,7 @@ export class SessionManager {
 				taxonomy,
 				this.getApiKey(),
 				this.getModelSlug(),
+				this.getLanguage(),
 			);
 		} catch {
 			new Notice('Memory extraction failed — session saved without candidates.');
@@ -50,7 +52,7 @@ export class SessionManager {
 		}
 
 		// Write trace
-		await this.writeTrace(sessionId, datetime, candidates);
+		await this.writeTrace(sessionId, datetime, transcript, candidates);
 
 		// Update active.md if any high/critical items
 		const important = candidates.filter(c => c.importance === 'high' || c.importance === 'critical');
@@ -174,15 +176,28 @@ export class SessionManager {
 	private async writeTrace(
 		sessionId: string,
 		datetime: string,
+		transcript: ChatMessage[],
 		candidates: MemoryItemCandidate[],
 	): Promise<void> {
 		const filename = datetime.replace('T', 'T').replace(':', '-') + `-${sessionId}-finalize.md`;
 		const path = `_system/traces/${filename}`;
+
+		const transcriptLines = transcript.map(m =>
+			`### ${m.role === 'user' ? 'User' : 'Agent'}\n\n${m.content}`,
+		).join('\n\n---\n\n');
+
 		const content = [
 			`# Trace: ${sessionId}`,
 			'',
 			`date: ${datetime}`,
+			`turns: ${transcript.length}`,
 			`candidates: ${candidates.length}`,
+			'',
+			'## Transcript',
+			'',
+			transcriptLines,
+			'',
+			'## Memory candidates',
 			'',
 			'```json',
 			JSON.stringify(candidates, null, 2),

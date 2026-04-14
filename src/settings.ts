@@ -3,11 +3,13 @@ import type MinimalAgentPlugin from './main';
 import type { Importance } from './types';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from './llm/curatedModels';
 import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
+import { LANGUAGES, detectDefaultLanguage } from './utils/language';
 
 export interface AgentSettings {
 	defaultSoul: string;
 	apiKey: string;
 	modelSlug: string;
+	language: string;
 	contextTokenBudget: number;
 	episodeDaysBack: number;
 	minImportanceForContext: Importance;
@@ -21,6 +23,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
 	defaultSoul: 'default',
 	apiKey: '',
 	modelSlug: 'qwen/qwen3.5-27b',
+	language: detectDefaultLanguage(),
 	contextTokenBudget: 8000,
 	episodeDaysBack: 2,
 	minImportanceForContext: 'medium',
@@ -84,6 +87,7 @@ export class AgentSettingTab extends PluginSettingTab {
 								void this.plugin.saveSettings();
 							});
 						},
+						this.plugin.settings.language,
 					).open();
 				});
 			});
@@ -190,6 +194,23 @@ export class AgentSettingTab extends PluginSettingTab {
 			});
 
 		if (!isCustom) renderModelInfo(this.plugin.settings.modelSlug);
+
+		// — Language —
+		containerEl.createEl('h3', { text: 'Language' });
+
+		new Setting(containerEl)
+			.setName('Response language')
+			.setDesc('Language used for all agent responses and memory extraction.')
+			.addDropdown(drop => {
+				for (const lang of Object.keys(LANGUAGES)) {
+					drop.addOption(lang, lang);
+				}
+				drop.setValue(this.plugin.settings.language);
+				drop.onChange(async (value) => {
+					this.plugin.settings.language = value;
+					await this.plugin.saveSettings();
+				});
+			});
 
 		// — Context —
 		containerEl.createEl('h3', { text: 'Context' });

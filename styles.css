@@ -7,6 +7,45 @@
 	overflow: hidden;
 }
 
+/* ─── Chat body wrapper ───────────────────────────────────────────────────── */
+
+.agent-chat-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+}
+
+/* ─── Finalizing loading screen ───────────────────────────────────────────── */
+
+.agent-finalizing {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	gap: 12px;
+	padding: 24px;
+	text-align: center;
+}
+
+.agent-finalizing .agent-mascot-img {
+	width: 64px;
+	height: 64px;
+}
+
+.agent-finalizing-title {
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.agent-finalizing-status {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	font-style: italic;
+}
+
 /* ─── Messages area ───────────────────────────────────────────────────────── */
 
 .agent-chat-messages {
