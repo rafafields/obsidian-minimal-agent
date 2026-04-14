@@ -4,8 +4,9 @@ import type { FrontmatterParser } from '../vault/FrontmatterParser';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK } from '../wizard/soulInstructions';
 import { createMascotImg } from '../ui/mascot';
+import { LoadingScreen } from '../ui/LoadingScreen';
 import { SoulManager } from './SoulManager';
-import { LANGUAGES, detectDefaultLanguage } from '../utils/language';
+import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
 
 type GenState = 'form' | 'generating' | 'done' | 'error';
 
@@ -19,7 +20,7 @@ export class SoulGeneratorModal extends Modal {
 	private state: GenState = 'form';
 	private errorMsg = '';
 	private generatedId = '';
-	private statusEl: HTMLElement | null = null;
+	private loadingScreen: LoadingScreen | null = null;
 
 	constructor(
 		app: App,
@@ -59,74 +60,72 @@ export class SoulGeneratorModal extends Modal {
 
 	private renderForm() {
 		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'Create a new soul' });
-		contentEl.createEl('p', {
-			text: 'Define the identity of this soul. These fields generate a soul file in _agent/souls/. You can edit it directly in Obsidian at any time.',
-			cls: 'agent-wizard-desc',
-		});
+		const L = this.language;
+		contentEl.createEl('h2', { text: t('soul_gen_title', L) });
+		contentEl.createEl('p', { text: t('soul_gen_desc', L), cls: 'agent-wizard-desc' });
 
 		new Setting(contentEl)
-			.setName('Soul name')
-			.setDesc('Display name for this soul (e.g. "Sofia").')
+			.setName(t('soul_gen_name_name', L))
+			.setDesc(t('soul_gen_name_desc', L))
 			.addText(text => text
-				.setPlaceholder('My Agent')
+				.setPlaceholder(t('soul_gen_name_ph', L))
 				.setValue(this.name)
 				.onChange(v => { this.name = v.trim(); }));
 
 		new Setting(contentEl)
-			.setName('Emoji')
-			.setDesc('Single emoji shown in the soul selector.')
+			.setName(t('soul_emoji', L))
+			.setDesc(t('soul_emoji_desc', L))
 			.addText(text => text
 				.setPlaceholder('✨')
 				.setValue(this.emoji)
 				.onChange(v => { this.emoji = v.trim() || '✨'; }));
 
 		new Setting(contentEl)
-			.setName('Core purpose')
-			.setDesc('What is this soul fundamentally for? (2–3 sentences)')
+			.setName(t('core_purpose', L))
+			.setDesc(t('core_purpose_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.corePurpose)
-					.setPlaceholder('A thinking companion for focused creative work.')
+					.setPlaceholder(t('core_purpose_placeholder', L))
 					.onChange(v => { this.corePurpose = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Core values')
-			.setDesc('What principles should guide it?')
+			.setName(t('core_values', L))
+			.setDesc(t('core_values_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.coreValues)
-					.setPlaceholder('Honesty, clarity, brevity.')
+					.setPlaceholder(t('core_values_placeholder', L))
 					.onChange(v => { this.coreValues = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Voice and tone')
-			.setDesc('How should it communicate?')
+			.setName(t('voice_tone', L))
+			.setDesc(t('voice_tone_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.voiceTone)
-					.setPlaceholder('Direct and concise. No filler. No hedging.')
+					.setPlaceholder(t('voice_tone_placeholder', L))
 					.onChange(v => { this.voiceTone = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Language')
-			.setDesc('Language for the generated soul document.')
+			.setName(t('language', L))
+			.setDesc(t('soul_gen_language_desc', L))
 			.addDropdown(dd => {
 				for (const lang of Object.keys(LANGUAGES)) dd.addOption(lang, lang);
 				dd.setValue(this.language).onChange(v => { this.language = v; });
 			});
 
 		const navEl = contentEl.createDiv({ cls: 'agent-wizard-nav' });
-		const cancelBtn = navEl.createEl('button', { text: 'Cancel' });
+		const cancelBtn = navEl.createEl('button', { text: t('cancel', L) });
 		cancelBtn.addEventListener('click', () => { this.close(); });
 
-		const generateBtn = navEl.createEl('button', { text: 'Generate', cls: 'mod-cta' });
+		const generateBtn = navEl.createEl('button', { text: t('generate', L), cls: 'mod-cta' });
 		generateBtn.addEventListener('click', () => {
 			if (!this.name) {
-				new Notice('Soul name is required.');
+				new Notice(t('soul_gen_name_required', L));
 				return;
 			}
 			this.state = 'generating';
@@ -138,34 +137,29 @@ export class SoulGeneratorModal extends Modal {
 	// — Generating —
 
 	private renderGenerating() {
-		const { contentEl } = this;
-		const wrapper = contentEl.createDiv({ cls: 'agent-wizard-mascot' });
-		createMascotImg(wrapper, 'thinking', 'agent-wizard-mascot-img');
-		contentEl.createEl('h2', { text: 'Generating soul…' });
-		this.statusEl = contentEl.createEl('p', {
-			text: 'Starting…',
-			cls: 'agent-wizard-loading-status',
-		});
+		const L = this.language;
+		this.loadingScreen = new LoadingScreen(this.contentEl, t('soul_gen_generating_title', L), t('starting', L));
 	}
 
 	private setStatus(text: string) {
-		if (this.statusEl) this.statusEl.setText(text);
+		this.loadingScreen?.setStatus(text);
 	}
 
 	// — Done —
 
 	private renderDone() {
 		const { contentEl } = this;
+		const L = this.language;
 		const wrapper = contentEl.createDiv({ cls: 'agent-wizard-mascot' });
 		createMascotImg(wrapper, 'inlove', 'agent-wizard-mascot-img');
-		contentEl.createEl('h2', { text: 'Soul created!' });
+		contentEl.createEl('h2', { text: t('soul_gen_done_title', L) });
 		contentEl.createEl('p', {
-			text: `"${this.name}" has been saved to _agent/souls/${this.generatedId}.md.`,
+			text: t('soul_gen_done_desc', L, { name: this.name, id: this.generatedId }),
 			cls: 'agent-wizard-desc',
 		});
 
 		const navEl = contentEl.createDiv({ cls: 'agent-wizard-nav' });
-		const closeBtn = navEl.createEl('button', { text: 'Close', cls: 'mod-cta' });
+		const closeBtn = navEl.createEl('button', { text: t('close', L), cls: 'mod-cta' });
 		closeBtn.addEventListener('click', () => { this.close(); });
 	}
 
@@ -173,17 +167,18 @@ export class SoulGeneratorModal extends Modal {
 
 	private renderError() {
 		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'Generation failed' });
+		const L = this.language;
+		contentEl.createEl('h2', { text: t('soul_gen_error_title', L) });
 		contentEl.createEl('p', {
-			text: this.errorMsg || 'An unexpected error occurred.',
+			text: this.errorMsg || t('error_unexpected', L),
 			cls: 'agent-wizard-desc',
 		});
 
 		const navEl = contentEl.createDiv({ cls: 'agent-wizard-nav agent-wizard-nav--split' });
-		const backBtn = navEl.createEl('button', { text: 'Back' });
+		const backBtn = navEl.createEl('button', { text: t('back', L) });
 		backBtn.addEventListener('click', () => { this.state = 'form'; this.render(); });
 
-		const retryBtn = navEl.createEl('button', { text: 'Try again', cls: 'mod-cta' });
+		const retryBtn = navEl.createEl('button', { text: t('try_again', L), cls: 'mod-cta' });
 		retryBtn.addEventListener('click', () => {
 			this.state = 'generating';
 			this.render();
@@ -197,7 +192,7 @@ export class SoulGeneratorModal extends Modal {
 		const id = SoulManager.nameToId(this.name);
 		const hasContent = !!(this.corePurpose.trim() || this.coreValues.trim() || this.voiceTone.trim());
 
-		this.setStatus('Generating soul document…');
+		this.setStatus(t('soul_gen_generating_soul', this.language));
 
 		let body: string;
 		try {
@@ -227,7 +222,7 @@ export class SoulGeneratorModal extends Modal {
 			body = SOUL_FALLBACK;
 		}
 
-		this.setStatus('Writing file…');
+		this.setStatus(t('soul_gen_generating_file', this.language));
 
 		try {
 			const now = new Date();

@@ -6,9 +6,10 @@ import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT } from '.
 import { calcCost, formatCost } from '../utils/tokens';
 import type { LLMUsage } from '../types';
 import { createMascotImg, type MascotState } from '../ui/mascot';
+import { LoadingScreen } from '../ui/LoadingScreen';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
 import { SoulManager } from '../souls/SoulManager';
-import { LANGUAGES, detectDefaultLanguage } from '../utils/language';
+import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -42,7 +43,7 @@ export class SetupWizard extends Modal {
 	private language: string;
 	private finishState: FinishState = 'loading';
 	private finishError = '';
-	private loadingStatusEl: HTMLElement | null = null;
+	private loadingScreen: LoadingScreen | null = null;
 	private generationCost: number | null = null;
 
 	constructor(
@@ -83,7 +84,7 @@ export class SetupWizard extends Modal {
 
 		if (this.step <= TOTAL_STEPS) {
 			contentEl.createEl('p', {
-				text: `Step ${this.step} of ${TOTAL_STEPS}`,
+				text: t('wizard_step_of', this.language, { step: String(this.step), total: String(TOTAL_STEPS) }),
 				cls: 'agent-wizard-progress',
 			});
 		}
@@ -102,20 +103,15 @@ export class SetupWizard extends Modal {
 
 	private renderStep1() {
 		const { contentEl } = this;
+		const L = this.language;
 		this.renderMascot(contentEl, 'inlove');
-		contentEl.createEl('h2', { text: 'Welcome to Minimal Agent' });
-		contentEl.createEl('p', {
-			text: 'A minimal AI agent that lives entirely inside your vault. Its personality, memory, and everything it knows about you are stored as plain Markdown files you can read and edit at any time.',
-			cls: 'agent-wizard-desc',
-		});
-		contentEl.createEl('p', {
-			text: 'This wizard will help you configure the API connection, define your agent\'s identity, and set up your vault structure. It only takes a minute.',
-			cls: 'agent-wizard-desc',
-		});
+		contentEl.createEl('h2', { text: t('wizard_welcome_title', L) });
+		contentEl.createEl('p', { text: t('wizard_welcome_desc1', L), cls: 'agent-wizard-desc' });
+		contentEl.createEl('p', { text: t('wizard_welcome_desc2', L), cls: 'agent-wizard-desc' });
 
 		new Setting(contentEl)
-			.setName('Language')
-			.setDesc('Language used for the generated soul and user documents.')
+			.setName(t('language', L))
+			.setDesc(t('wizard_welcome_language_desc', L))
 			.addDropdown(dd => {
 				for (const lang of Object.keys(LANGUAGES)) {
 					dd.addOption(lang, lang);
@@ -127,65 +123,121 @@ export class SetupWizard extends Modal {
 				});
 			});
 
-		this.renderNav(null, () => { this.step = 2; this.render(); }, 'Get started');
+		this.renderNav(null, () => { this.step = 2; this.render(); }, t('wizard_get_started', L));
 	}
 
 	// — Step 2: API config —
 
 	private renderStep2() {
 		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'Connect to OpenRouter' });
-		contentEl.createEl('p', {
-			text: 'Minimal Agent uses OpenRouter to access language models. Your API key is stored only in Obsidian plugin settings — never written to the vault.',
-			cls: 'agent-wizard-desc',
+		const L = this.language;
+
+		// ── 1. API title + description ────────────────────────────
+		contentEl.createEl('h2', { text: t('wizard_api_title', L) });
+		contentEl.createEl('p', { text: t('wizard_api_desc', L), cls: 'agent-wizard-desc' });
+
+		// ── 2. API key input (full-width, stacked) ────────────────
+		const apiFieldEl = contentEl.createDiv({ cls: 'agent-wizard-field' });
+		apiFieldEl.createEl('label', { text: t('wizard_api_key_name', L), cls: 'agent-wizard-field__label' });
+		const apiInput = apiFieldEl.createEl('input', {
+			cls: 'agent-wizard-field__input',
+			attr: { type: 'password', placeholder: 'sk-or-...' },
+		});
+		apiInput.value = this.apiKey;
+		apiInput.addEventListener('input', () => { this.apiKey = apiInput.value.trim(); });
+
+		// ── 3. OpenRouter signup link ─────────────────────────────
+		const signupEl = contentEl.createDiv({ cls: 'agent-wizard-link-hint' });
+		signupEl.createSpan({ text: t('openrouter_no_account', L) + ' ' });
+		const signupLink = signupEl.createEl('a', { text: t('openrouter_signup_link', L) });
+		signupLink.addEventListener('click', (e) => {
+			e.preventDefault();
+			window.open('https://openrouter.ai/', '_blank');
 		});
 
-		new Setting(contentEl)
-			.setName('OpenRouter API key')
-			.setDesc('Your key from openrouter.ai.')
-			.addText(text => {
-				text.inputEl.type = 'password';
-				text
-					.setPlaceholder('sk-or-...')
-					.setValue(this.apiKey)
-					.onChange(v => { this.apiKey = v.trim(); });
-			});
+		// ── 4. Separator ──────────────────────────────────────────
+		contentEl.createEl('hr', { cls: 'agent-wizard-separator' });
 
+		// ── 5. Model title ────────────────────────────────────────
+		contentEl.createEl('h3', { text: t('model', L), cls: 'agent-wizard-section-title' });
+
+		// ── 6. Model description with inline ZDR link ─────────────
+		const modelDescEl = contentEl.createDiv({ cls: 'agent-wizard-desc' });
+		const [descBefore, descAfter] = t('wizard_model_desc', L).split('{zdr}');
+		modelDescEl.createSpan({ text: descBefore ?? '' });
+		const zdrDescLink = modelDescEl.createEl('a', { text: 'ZDR ✓', cls: 'agent-wizard-zdr-link' });
+		zdrDescLink.addEventListener('click', (e) => {
+			e.preventDefault();
+			window.open('https://openrouter.ai/docs/guides/features/zdr', '_blank');
+		});
+		modelDescEl.createSpan({ text: descAfter ?? '' });
+
+		// ── 7. Model selector (full-width) ────────────────────────
 		const isCustomSlug = !findCuratedModel(this.modelSlug);
-		const customSlugEl = contentEl.createDiv();
+		const modelFieldEl = contentEl.createDiv({ cls: 'agent-wizard-field' });
+		const modelSelect = modelFieldEl.createEl('select', { cls: 'agent-wizard-field__select dropdown' });
+		for (const m of CURATED_MODELS) {
+			modelSelect.createEl('option', { text: `${m.displayName} (${m.provider})`, value: m.slug });
+		}
+		modelSelect.createEl('option', { text: 'Custom…', value: CUSTOM_MODEL_OPTION });
+		modelSelect.value = isCustomSlug ? CUSTOM_MODEL_OPTION : this.modelSlug;
 
-		new Setting(contentEl)
-			.setName('Model')
-			.setDesc('Select a model for soul and user document generation.')
-			.addDropdown(drop => {
-				for (const m of CURATED_MODELS) {
-					drop.addOption(m.slug, `${m.displayName} (${m.provider})`);
-				}
-				drop.addOption(CUSTOM_MODEL_OPTION, 'Custom…');
-				drop.setValue(isCustomSlug ? CUSTOM_MODEL_OPTION : this.modelSlug);
-				drop.onChange(v => {
-					if (v === CUSTOM_MODEL_OPTION) {
-						customSlugEl.style.display = '';
-					} else {
-						this.modelSlug = v;
-						customSlugEl.style.display = 'none';
-					}
-				});
+		// Custom slug input (shown only when Custom… is selected)
+		const customFieldEl = contentEl.createDiv({ cls: 'agent-wizard-field' });
+		customFieldEl.style.display = isCustomSlug ? '' : 'none';
+		customFieldEl.createEl('label', { text: t('custom_model_slug', L), cls: 'agent-wizard-field__label' });
+		const customInput = customFieldEl.createEl('input', {
+			cls: 'agent-wizard-field__input',
+			attr: { type: 'text', placeholder: 'provider/model-name' },
+		});
+		customInput.value = isCustomSlug ? this.modelSlug : '';
+		customInput.addEventListener('input', () => { this.modelSlug = customInput.value.trim(); });
+
+		// ── 8. Model detail card ──────────────────────────────────
+		const modelCardEl = contentEl.createDiv({ cls: 'agent-wizard-model-card' });
+		modelCardEl.style.display = isCustomSlug ? 'none' : '';
+
+		const refreshModelCard = (slug: string) => {
+			modelCardEl.empty();
+			const model = findCuratedModel(slug);
+			if (!model) { modelCardEl.style.display = 'none'; return; }
+			modelCardEl.style.display = '';
+
+			if (model.zdr) {
+				modelCardEl.createSpan({ text: 'ZDR', cls: 'agent-wizard-model-card__zdr' });
+			}
+			const headerEl = modelCardEl.createDiv({ cls: 'agent-wizard-model-card__header' });
+			headerEl.createSpan({
+				text: `${model.displayName} · ${model.provider}`,
+				cls: 'agent-wizard-model-card__name',
 			});
+			modelCardEl.createDiv({
+				text: `Input: $${model.inputPricePerM.toFixed(2)} / 1M · Output: $${model.outputPricePerM.toFixed(2)} / 1M`,
+				cls: 'agent-wizard-model-card__price',
+			});
+			modelCardEl.createDiv({ text: model.description, cls: 'agent-wizard-model-card__desc' });
+		};
 
-		customSlugEl.style.display = isCustomSlug ? '' : 'none';
-		new Setting(customSlugEl)
-			.setName('Custom model slug')
-			.addText(text => text
-				.setPlaceholder('provider/model-name')
-				.setValue(isCustomSlug ? this.modelSlug : '')
-				.onChange(v => { this.modelSlug = v.trim(); }));
+		modelSelect.addEventListener('change', () => {
+			const v = modelSelect.value;
+			if (v === CUSTOM_MODEL_OPTION) {
+				customFieldEl.style.display = '';
+				modelCardEl.style.display = 'none';
+				modelCardEl.empty();
+			} else {
+				this.modelSlug = v;
+				customFieldEl.style.display = 'none';
+				refreshModelCard(v);
+			}
+		});
+
+		if (!isCustomSlug) refreshModelCard(this.modelSlug);
 
 		this.renderNav(
 			() => { this.step = 1; this.render(); },
 			() => {
 				if (!this.apiKey) {
-					new Notice('API key is required to continue.');
+					new Notice(t('wizard_api_key_required', L));
 					return;
 				}
 				this.step = 3;
@@ -198,38 +250,36 @@ export class SetupWizard extends Modal {
 
 	private renderStep3() {
 		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'About you' });
-		contentEl.createEl('p', {
-			text: 'These fields generate _agent/user.md — how the agent models you. Edit it freely at any time.',
-			cls: 'agent-wizard-desc',
-		});
+		const L = this.language;
+		contentEl.createEl('h2', { text: t('wizard_about_you_title', L) });
+		contentEl.createEl('p', { text: t('wizard_about_you_desc', L), cls: 'agent-wizard-desc' });
 
 		new Setting(contentEl)
-			.setName('How you work')
-			.setDesc('Work style, rhythm, tools, or context the agent should know.')
+			.setName(t('wizard_work_style_name', L))
+			.setDesc(t('wizard_work_style_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.workStyle)
-					.setPlaceholder('I work in focused 2-hour blocks. I prefer async communication.')
+					.setPlaceholder(t('wizard_work_style_ph', L))
 					.onChange(v => { this.workStyle = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Communication preferences')
-			.setDesc('How do you want responses structured?')
+			.setName(t('wizard_comm_prefs_name', L))
+			.setDesc(t('wizard_comm_prefs_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.commPreferences)
-					.setPlaceholder('Short answers by default. Offer to expand if needed.')
+					.setPlaceholder(t('wizard_comm_prefs_ph', L))
 					.onChange(v => { this.commPreferences = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Current areas of focus')
-			.setDesc('Topics or projects you\'re working on right now.')
+			.setName(t('wizard_focus_name', L))
+			.setDesc(t('wizard_focus_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.interests)
-					.setPlaceholder('Building an Obsidian plugin, learning TypeScript.')
+					.setPlaceholder(t('wizard_focus_ph', L))
 					.onChange(v => { this.interests = v; });
 				ta.inputEl.rows = 3;
 			});
@@ -244,54 +294,52 @@ export class SetupWizard extends Modal {
 
 	private renderStep4() {
 		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'Define your agent' });
-		contentEl.createEl('p', {
-			text: 'These fields generate _agent/souls/default.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
-			cls: 'agent-wizard-desc',
-		});
+		const L = this.language;
+		contentEl.createEl('h2', { text: t('wizard_define_title', L) });
+		contentEl.createEl('p', { text: t('wizard_define_desc', L), cls: 'agent-wizard-desc' });
 
 		new Setting(contentEl)
-			.setName('Agent name')
-			.setDesc('How the agent will be identified in the chat and interface.')
+			.setName(t('wizard_agent_name_name', L))
+			.setDesc(t('wizard_agent_name_desc', L))
 			.addText(text => text
 				.setPlaceholder('Agent')
 				.setValue(this.agentName)
 				.onChange(v => { this.agentName = v.trim(); }));
 
 		new Setting(contentEl)
-			.setName('Soul emoji')
-			.setDesc('Single emoji shown in the soul selector.')
+			.setName(t('soul_emoji', L))
+			.setDesc(t('soul_emoji_desc', L))
 			.addText(text => text
 				.setPlaceholder('✨')
 				.setValue(this.soulEmoji)
 				.onChange(v => { this.soulEmoji = v.trim() || '✨'; }));
 
 		new Setting(contentEl)
-			.setName('Core purpose')
-			.setDesc('What is this agent fundamentally for? (2–3 sentences)')
+			.setName(t('core_purpose', L))
+			.setDesc(t('core_purpose_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.corePurpose)
-					.setPlaceholder('A general-purpose thinking companion for my daily work.')
+					.setPlaceholder(t('core_purpose_placeholder', L))
 					.onChange(v => { this.corePurpose = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Core values')
-			.setDesc('What principles should guide it?')
+			.setName(t('core_values', L))
+			.setDesc(t('core_values_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.coreValues)
-					.setPlaceholder('Honesty, clarity, brevity.')
+					.setPlaceholder(t('core_values_placeholder', L))
 					.onChange(v => { this.coreValues = v; });
 				ta.inputEl.rows = 3;
 			});
 
 		new Setting(contentEl)
-			.setName('Voice and tone')
-			.setDesc('How should it communicate?')
+			.setName(t('voice_tone', L))
+			.setDesc(t('voice_tone_desc', L))
 			.addTextArea(ta => {
 				ta.setValue(this.voiceTone)
-					.setPlaceholder('Direct and concise. No filler. No hedging.')
+					.setPlaceholder(t('voice_tone_placeholder', L))
 					.onChange(v => { this.voiceTone = v; });
 				ta.inputEl.rows = 3;
 			});
@@ -306,11 +354,9 @@ export class SetupWizard extends Modal {
 
 	private renderStep5() {
 		const { contentEl } = this;
-		contentEl.createEl('h2', { text: 'Initial tag taxonomy' });
-		contentEl.createEl('p', {
-			text: 'Select the topic tags to activate in _agent/taxonomy.md. The agent can only assign tags from this list. You can add more directly in the file at any time.',
-			cls: 'agent-wizard-desc',
-		});
+		const L = this.language;
+		contentEl.createEl('h2', { text: t('wizard_tags_title', L) });
+		contentEl.createEl('p', { text: t('wizard_tags_desc', L), cls: 'agent-wizard-desc' });
 
 		for (const tag of SUGGESTED_TAGS) {
 			new Setting(contentEl)
@@ -331,7 +377,7 @@ export class SetupWizard extends Modal {
 				this.render();
 				void this.runFinish();
 			},
-			'Finish',
+			t('finish', L),
 		);
 	}
 
@@ -339,45 +385,35 @@ export class SetupWizard extends Modal {
 
 	private renderStep6() {
 		const { contentEl } = this;
+		const L = this.language;
 
 		if (this.finishState === 'loading') {
-			this.renderMascot(contentEl, 'thinking');
-			contentEl.createEl('h2', { text: 'Setting up your agent…' });
-			this.loadingStatusEl = contentEl.createEl('p', {
-				text: 'Starting…',
-				cls: 'agent-wizard-loading-status',
-			});
+			this.loadingScreen = new LoadingScreen(contentEl, t('wizard_loading_title', L), t('starting', L));
 		} else if (this.finishState === 'done') {
 			this.renderMascot(contentEl, 'inlove');
-			contentEl.createEl('h2', { text: 'You\'re all set!' });
+			contentEl.createEl('h2', { text: t('wizard_done_title', L) });
 			contentEl.createEl('p', {
-				text: `Your agent "${this.agentName || 'Agent'}" has been initialized with ${this.selectedTags.size} active tags. All files are ready in your vault under _agent/.`,
+				text: t('wizard_done_desc', L, { name: this.agentName || 'Agent', tags: String(this.selectedTags.size) }),
 				cls: 'agent-wizard-desc',
 			});
 			if (this.generationCost !== null) {
 				contentEl.createEl('p', {
-					text: `Generation cost: ${formatCost(this.generationCost)}`,
+					text: t('wizard_done_cost', L, { cost: formatCost(this.generationCost) }),
 					cls: 'agent-wizard-desc agent-wizard-cost',
 				});
 			}
-			contentEl.createEl('p', {
-				text: 'Open the chat to start your first conversation. You can access it anytime from the ribbon or the command palette.',
-				cls: 'agent-wizard-desc',
-			});
+			contentEl.createEl('p', { text: t('wizard_done_open_desc', L), cls: 'agent-wizard-desc' });
 
 			const navEl = contentEl.createDiv({ cls: 'agent-wizard-nav agent-wizard-nav--center' });
-			const openBtn = navEl.createEl('button', {
-				text: 'Open chat',
-				cls: 'mod-cta',
-			});
+			const openBtn = navEl.createEl('button', { text: t('wizard_open_chat', L), cls: 'mod-cta' });
 			openBtn.addEventListener('click', () => {
 				this.close();
 				this.plugin.openChatView();
 			});
 		} else {
-			contentEl.createEl('h2', { text: 'Setup failed' });
+			contentEl.createEl('h2', { text: t('wizard_error_title', L) });
 			contentEl.createEl('p', {
-				text: this.finishError || 'An unexpected error occurred.',
+				text: this.finishError || t('error_unexpected', L),
 				cls: 'agent-wizard-desc',
 			});
 
@@ -388,7 +424,7 @@ export class SetupWizard extends Modal {
 					this.render();
 					void this.runFinish();
 				},
-				'Try again',
+				t('try_again', L),
 			);
 		}
 	}
@@ -396,7 +432,7 @@ export class SetupWizard extends Modal {
 	// — Helpers —
 
 	private updateLoadingStatus(text: string): void {
-		if (this.loadingStatusEl) this.loadingStatusEl.setText(text);
+		this.loadingScreen?.setStatus(text);
 	}
 
 	private renderMascot(container: HTMLElement, state: MascotState) {
@@ -407,15 +443,16 @@ export class SetupWizard extends Modal {
 	private renderNav(
 		onBack: (() => void) | null,
 		onNext: (() => void) | null,
-		nextLabel = 'Next',
+		nextLabel?: string,
 	) {
+		nextLabel ??= t('next', this.language);
 		const hasBoth = !!onBack && !!onNext;
 		const navEl = this.contentEl.createDiv({
 			cls: 'agent-wizard-nav' + (hasBoth ? ' agent-wizard-nav--split' : ''),
 		});
 
 		if (onBack) {
-			const backBtn = navEl.createEl('button', { text: 'Back' });
+			const backBtn = navEl.createEl('button', { text: t('back', this.language) });
 			backBtn.addEventListener('click', onBack);
 		}
 
@@ -510,7 +547,8 @@ export class SetupWizard extends Modal {
 		// Kick off pricing fetch concurrently — it must not block generation
 		const pricingPromise = this.plugin.getModelPricing().catch(() => null);
 
-		this.updateLoadingStatus('Generating user.md…');
+		const L = this.language;
+		this.updateLoadingStatus(t('wizard_loading_user', L));
 		let userBody: string;
 		let userUsage: import('../types').LLMUsage | null = null;
 		try {
@@ -519,11 +557,11 @@ export class SetupWizard extends Modal {
 			userUsage = result?.usage ?? null;
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
-			new Notice(`User document generation failed: ${msg}. Using form input as fallback.`);
+			new Notice(t('wizard_user_gen_failed', L, { msg }));
 			userBody = this.userFallback();
 		}
 
-		this.updateLoadingStatus('Generating soul…');
+		this.updateLoadingStatus(t('wizard_loading_soul', L));
 		let soulBody: string;
 		let soulUsage: import('../types').LLMUsage | null = null;
 		try {
@@ -532,11 +570,11 @@ export class SetupWizard extends Modal {
 			soulUsage = result?.usage ?? null;
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
-			new Notice(`Soul generation failed: ${msg}. Using fallback soul.`);
+			new Notice(t('wizard_soul_gen_failed', L, { msg }));
 			soulBody = SOUL_FALLBACK;
 		}
 
-		this.updateLoadingStatus('Writing vault files…');
+		this.updateLoadingStatus(t('wizard_loading_files', L));
 
 		// Collect pricing (should be resolved by now; 3s safety timeout)
 		const pricing = await Promise.race([

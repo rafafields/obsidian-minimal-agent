@@ -5,6 +5,7 @@ import type { TaxonomyManager } from '../vault/TaxonomyManager';
 import { MemoryExtractor } from '../memory/MemoryExtractor';
 import type { ChatMessage, MemoryItemCandidate } from '../types';
 import { countTokens } from '../utils/tokens';
+import { t } from '../utils/language';
 
 export class SessionManager {
 	private extractor = new MemoryExtractor();
@@ -40,7 +41,7 @@ export class SessionManager {
 				this.getLanguage(),
 			);
 		} catch {
-			new Notice('Memory extraction failed — session saved without candidates.');
+			new Notice(t('session_extraction_failed', this.getLanguage()));
 		}
 
 		// Write episode
@@ -60,9 +61,13 @@ export class SessionManager {
 			await this.updateActiveMdFromCandidates(important, datetime);
 		}
 
-		new Notice(
-			`Session saved. ${candidates.length} memory candidate${candidates.length !== 1 ? 's' : ''} written to _pending/.`,
-		);
+		const lang = this.getLanguage();
+		const savedNotice = candidates.length === 0
+			? t('session_saved_zero', lang)
+			: candidates.length === 1
+				? t('session_saved_one', lang)
+				: t('session_saved_many', lang, { n: String(candidates.length) });
+		new Notice(savedNotice);
 	}
 
 	// — Episode —

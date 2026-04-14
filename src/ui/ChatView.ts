@@ -5,6 +5,8 @@ import { LLMError, type ChatMessage, type SoulMeta } from '../types';
 import { calcCost, countTokens, formatCost } from '../utils/tokens';
 import { createMascotImg, type MascotState } from './mascot';
 import { SoulGeneratorModal } from '../souls/SoulGeneratorModal';
+import { t } from '../utils/language';
+import { LoadingScreen } from './LoadingScreen';
 
 export const CHAT_VIEW_TYPE = 'agent-chat';
 
@@ -20,7 +22,7 @@ export class ChatView extends ItemView {
 
 	private chatEl!: HTMLElement;
 	private finalizingEl!: HTMLElement;
-	private finalizingStatusEl!: HTMLElement;
+	private finalizingScreen!: LoadingScreen;
 	private messagesEl!: HTMLElement;
 	private textareaEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
@@ -50,10 +52,12 @@ export class ChatView extends ItemView {
 		// — Finalizing loading screen (hidden by default) —
 		this.finalizingEl = root.createDiv({ cls: 'agent-finalizing' });
 		this.finalizingEl.hide();
-		const { setState: setFinalizingMascot } = createMascotImg(this.finalizingEl, 'thinking');
-		void setFinalizingMascot; // keep reference but mascot animates on its own
-		this.finalizingEl.createDiv({ cls: 'agent-finalizing-title', text: 'Saving session…' });
-		this.finalizingStatusEl = this.finalizingEl.createDiv({ cls: 'agent-finalizing-status', text: 'Extracting memories…' });
+		const uiLang = this.plugin.settings.language;
+		this.finalizingScreen = new LoadingScreen(
+			this.finalizingEl,
+			t('chat_saving_session', uiLang),
+			t('chat_extracting_memories', uiLang),
+		);
 
 		// — Main chat wrapper —
 		this.chatEl = root.createDiv({ cls: 'agent-chat-body' });
@@ -77,7 +81,7 @@ export class ChatView extends ItemView {
 				}
 		});
 
-		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: 'Create new soul' } });
+		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: t('chat_create_soul_title', this.plugin.settings.language) } });
 		soulAddBtn.addEventListener('click', () => {
 			new SoulGeneratorModal(
 				this.app,
@@ -99,21 +103,22 @@ export class ChatView extends ItemView {
 		const footerEl = this.chatEl.createDiv({ cls: 'agent-chat-footer' });
 
 		const composerEl = footerEl.createDiv({ cls: 'agent-chat-composer' });
+		const lang = this.plugin.settings.language;
 		this.textareaEl = composerEl.createEl('textarea', {
 			cls: 'agent-chat-input',
-			attr: { placeholder: 'Message… (Ctrl+Enter to send)', rows: '3' },
+			attr: { placeholder: t('chat_input_placeholder', lang), rows: '3' },
 		});
 		this.sendBtn = composerEl.createEl('button', { cls: 'mod-cta agent-chat-send' });
 		this.sendBtn.createEl('span', { text: '↵', cls: 'agent-chat-send-icon' });
-		this.sendBtn.createEl('span', { text: 'Send', cls: 'agent-chat-send-label' });
+		this.sendBtn.createEl('span', { text: t('chat_send', lang), cls: 'agent-chat-send-label' });
 
 		const actionsEl = footerEl.createDiv({ cls: 'agent-chat-actions' });
 		this.finalizeBtn = actionsEl.createEl('button', {
-			text: 'Finalize and memorize',
+			text: t('chat_finalize', lang),
 			cls: 'agent-chat-finalize',
 		});
 		this.saveChatBtn = actionsEl.createEl('button', {
-			text: 'Save conversation',
+			text: t('chat_save', lang),
 			cls: 'agent-chat-save',
 		});
 
@@ -220,7 +225,7 @@ export class ChatView extends ItemView {
 		} catch (e) {
 			this.removeLoadingBubble();
 			const msg = e instanceof LLMError ? e.message : String(e);
-			new Notice(`Agent error: ${msg}`);
+			new Notice(t('chat_agent_error', this.plugin.settings.language, { msg }));
 			this.transcript.pop(); // remove failed user turn
 		} finally {
 			this.setProcessing(false);
@@ -256,7 +261,7 @@ export class ChatView extends ItemView {
 	private showLoadingBubble(): void {
 		this.loadingEl = this.messagesEl.createDiv({ cls: 'agent-message agent-message--agent' });
 		const contentEl = this.loadingEl.createDiv({ cls: 'agent-message-content agent-message-loading' });
-		contentEl.setText(`${this.soulDisplayName} is thinking…`);
+		contentEl.setText(t('chat_thinking', this.plugin.settings.language, { name: this.soulDisplayName }));
 		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
 	}
 
@@ -331,7 +336,7 @@ export class ChatView extends ItemView {
 
 		const path = `chats/${date} ${fileTime}.md`;
 		await this.plugin.vaultManager.writeFile(path, lines.join('\n'));
-		new Notice(`Conversation saved to ${path}`);
+		new Notice(t('chat_saved_notice', this.plugin.settings.language, { path }));
 	}
 
 	// — Session finalization —

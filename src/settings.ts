@@ -3,7 +3,7 @@ import type MinimalAgentPlugin from './main';
 import type { Importance } from './types';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from './llm/curatedModels';
 import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
-import { LANGUAGES, detectDefaultLanguage } from './utils/language';
+import { LANGUAGES, detectDefaultLanguage, t } from './utils/language';
 
 export interface AgentSettings {
 	defaultSoul: string;
@@ -44,19 +44,36 @@ export class AgentSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		const L = this.plugin.settings.language;
+
+		const buildZdrDesc = (template: string): DocumentFragment => {
+			const [before, after] = template.split('{zdr}');
+			const frag = document.createDocumentFragment();
+			frag.append(before ?? '');
+			const link = document.createElement('a');
+			link.textContent = 'ZDR ✓';
+			link.className = 'agent-wizard-zdr-link';
+			link.addEventListener('click', (e) => {
+				e.preventDefault();
+				window.open('https://openrouter.ai/docs/guides/features/zdr', '_blank');
+			});
+			frag.appendChild(link);
+			frag.append(after ?? '');
+			return frag;
+		};
 
 		// — Souls —
-		containerEl.createEl('h3', { text: 'Souls' });
+		containerEl.createEl('h3', { text: t('settings_souls_section', L) });
 
 		// Soul selector — populated async
 		let soulDropdown: HTMLSelectElement | null = null;
 
 		const soulSetting = new Setting(containerEl)
-			.setName('Default soul')
-			.setDesc('Soul loaded at the start of every new conversation.')
+			.setName(t('settings_default_soul_name', L))
+			.setDesc(t('settings_default_soul_desc', L))
 			.addDropdown(drop => {
 				soulDropdown = drop.selectEl;
-				drop.addOption(this.plugin.settings.defaultSoul, `Loading… (${this.plugin.settings.defaultSoul})`);
+				drop.addOption(this.plugin.settings.defaultSoul, t('settings_souls_loading', L, { id: this.plugin.settings.defaultSoul }));
 				drop.setValue(this.plugin.settings.defaultSoul);
 				drop.onChange(async (value) => {
 					this.plugin.settings.defaultSoul = value;
@@ -64,7 +81,7 @@ export class AgentSettingTab extends PluginSettingTab {
 				});
 			})
 			.addButton(btn => {
-				btn.setButtonText('Create new soul').onClick(() => {
+				btn.setButtonText(t('settings_create_soul_btn', L)).onClick(() => {
 					new SoulGeneratorModal(
 						this.app,
 						this.plugin.vaultManager,
@@ -99,7 +116,7 @@ export class AgentSettingTab extends PluginSettingTab {
 			const currentValue = this.plugin.settings.defaultSoul;
 			soulDropdown.empty();
 			if (souls.length === 0) {
-				soulDropdown.createEl('option', { text: 'No souls found — create one', value: '' });
+				soulDropdown.createEl('option', { text: t('settings_souls_none', L), value: '' });
 				return;
 			}
 			for (const s of souls) {
@@ -112,13 +129,13 @@ export class AgentSettingTab extends PluginSettingTab {
 		});
 
 		// — API —
-		containerEl.createEl('h3', { text: 'API' });
+		containerEl.createEl('h3', { text: t('settings_api_section', L) });
 
 		new Setting(containerEl)
-			.setName('API key')
+			.setName(t('settings_api_key_name', L))
 			.setDesc(this.plugin.settings.apiKey
-				? 'API key configured.'
-				: 'No API key set — the agent will not work until you add one.')
+				? t('settings_api_key_configured', L)
+				: t('settings_api_key_missing', L))
 			.addText(text => {
 				text.inputEl.type = 'password';
 				text
@@ -142,9 +159,6 @@ export class AgentSettingTab extends PluginSettingTab {
 			if (!model) return;
 			const priceEl = modelInfoEl.createDiv({ cls: 'agent-model-info__price' });
 			priceEl.createSpan({ text: `Input: $${model.inputPricePerM.toFixed(2)} / 1M · Output: $${model.outputPricePerM.toFixed(2)} / 1M` });
-			if (model.zdr) {
-				priceEl.createSpan({ text: ' · ZDR ✓', cls: 'agent-model-info__zdr' });
-			}
 			modelInfoEl.createDiv({ text: model.description, cls: 'agent-model-info__desc' });
 		};
 
@@ -154,8 +168,8 @@ export class AgentSettingTab extends PluginSettingTab {
 		let customInput: HTMLInputElement;
 
 		new Setting(containerEl)
-			.setName('Model')
-			.setDesc('Select a curated model or choose "Custom…" to enter any OpenRouter slug.')
+			.setName(t('model', L))
+			.setDesc(buildZdrDesc(t('settings_model_desc', L)))
 			.addDropdown(drop => {
 				for (const m of CURATED_MODELS) {
 					drop.addOption(m.slug, `${m.displayName} (${m.provider})`);
@@ -180,12 +194,12 @@ export class AgentSettingTab extends PluginSettingTab {
 		containerEl.appendChild(customFieldEl);
 
 		new Setting(customFieldEl)
-			.setName('Custom model slug')
-			.setDesc('Any valid OpenRouter model ID (e.g. mistralai/mistral-7b-instruct).')
+			.setName(t('custom_model_slug', L))
+			.setDesc(t('settings_model_custom_desc', L))
 			.addText(text => {
 				customInput = text.inputEl;
 				text
-					.setPlaceholder('provider/model-name')
+					.setPlaceholder(t('settings_model_custom_ph', L))
 					.setValue(isCustom ? this.plugin.settings.modelSlug : '')
 					.onChange(async (value) => {
 						this.plugin.settings.modelSlug = value.trim();
@@ -196,11 +210,11 @@ export class AgentSettingTab extends PluginSettingTab {
 		if (!isCustom) renderModelInfo(this.plugin.settings.modelSlug);
 
 		// — Language —
-		containerEl.createEl('h3', { text: 'Language' });
+		containerEl.createEl('h3', { text: t('settings_language_section', L) });
 
 		new Setting(containerEl)
-			.setName('Response language')
-			.setDesc('Language used for all agent responses and memory extraction.')
+			.setName(t('settings_language_name', L))
+			.setDesc(t('settings_language_desc', L))
 			.addDropdown(drop => {
 				for (const lang of Object.keys(LANGUAGES)) {
 					drop.addOption(lang, lang);
@@ -213,11 +227,11 @@ export class AgentSettingTab extends PluginSettingTab {
 			});
 
 		// — Context —
-		containerEl.createEl('h3', { text: 'Context' });
+		containerEl.createEl('h3', { text: t('settings_context_section', L) });
 
 		new Setting(containerEl)
-			.setName('Token budget')
-			.setDesc('Maximum tokens to use for context assembly per session.')
+			.setName(t('settings_token_budget_name', L))
+			.setDesc(t('settings_token_budget_desc', L))
 			.addText(text => text
 				.setValue(String(this.plugin.settings.contextTokenBudget))
 				.onChange(async (value) => {
@@ -229,7 +243,7 @@ export class AgentSettingTab extends PluginSettingTab {
 				}));
 
 		const ctxInfoEl = containerEl.createDiv({ cls: 'agent-ctx-info' });
-		ctxInfoEl.createSpan({ text: 'Calculating context usage…', cls: 'agent-ctx-info__text' });
+		ctxInfoEl.createSpan({ text: t('settings_ctx_calculating', L), cls: 'agent-ctx-info__text' });
 
 		void this.plugin.contextAssembler.assemble({
 			tokenBudget: this.plugin.settings.contextTokenBudget,
@@ -240,22 +254,27 @@ export class AgentSettingTab extends PluginSettingTab {
 			const budget = this.plugin.settings.contextTokenBudget;
 			const used = result.totalTokens;
 			const pct = Math.round((used / budget) * 100);
-			const dropped = result.droppedItems > 0
-				? ` · ${result.droppedItems} item${result.droppedItems !== 1 ? 's' : ''} dropped`
+			const droppedStr = result.droppedItems > 0
+				? t('settings_ctx_dropped', L, { n: String(result.droppedItems), s: result.droppedItems !== 1 ? 's' : '' })
 				: '';
-			const label = `Context usage: ~${used.toLocaleString()} / ${budget.toLocaleString()} tokens (${pct}%)${dropped}`;
+			const label = t('settings_ctx_usage', L, {
+				used: used.toLocaleString(),
+				budget: budget.toLocaleString(),
+				pct: String(pct),
+				dropped: droppedStr,
+			});
 
 			ctxInfoEl.empty();
 			const span = ctxInfoEl.createSpan({ text: label, cls: 'agent-ctx-info__text' });
 			span.addClass(pct >= 100 ? 'agent-ctx-info--over' : pct >= 80 ? 'agent-ctx-info--warn' : 'agent-ctx-info--ok');
 		}).catch(() => {
 			ctxInfoEl.empty();
-			ctxInfoEl.createSpan({ text: 'Could not calculate context — run the setup wizard first.', cls: 'agent-ctx-info__text agent-ctx-info--muted' });
+			ctxInfoEl.createSpan({ text: t('settings_ctx_error', L), cls: 'agent-ctx-info__text agent-ctx-info--muted' });
 		});
 
 		new Setting(containerEl)
-			.setName('Episode history (days)')
-			.setDesc('How many days of past episodes to load into context.')
+			.setName(t('settings_episode_days_name', L))
+			.setDesc(t('settings_episode_days_desc', L))
 			.addText(text => text
 				.setValue(String(this.plugin.settings.episodeDaysBack))
 				.onChange(async (value) => {
@@ -267,13 +286,13 @@ export class AgentSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Minimum importance for context')
-			.setDesc('Memory items below this importance level are excluded from context.')
+			.setName(t('settings_min_importance_name', L))
+			.setDesc(t('settings_min_importance_desc', L))
 			.addDropdown(drop => drop
-				.addOption('low', 'Low')
-				.addOption('medium', 'Medium')
-				.addOption('high', 'High')
-				.addOption('critical', 'Critical')
+				.addOption('low', t('settings_importance_low', L))
+				.addOption('medium', t('settings_importance_medium', L))
+				.addOption('high', t('settings_importance_high', L))
+				.addOption('critical', t('settings_importance_critical', L))
 				.setValue(this.plugin.settings.minImportanceForContext)
 				.onChange(async (value) => {
 					this.plugin.settings.minImportanceForContext = value as Importance;
@@ -281,11 +300,11 @@ export class AgentSettingTab extends PluginSettingTab {
 				}));
 
 		// — Memory —
-		containerEl.createEl('h3', { text: 'Memory' });
+		containerEl.createEl('h3', { text: t('settings_memory_section', L) });
 
 		new Setting(containerEl)
-			.setName('Require confirmation before writing')
-			.setDesc('When enabled, memory candidates are written to _pending/ for manual review before being confirmed.')
+			.setName(t('settings_require_confirm_name', L))
+			.setDesc(t('settings_require_confirm_desc', L))
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.requireConfirmBeforeWrite)
 				.onChange(async (value) => {
@@ -294,8 +313,8 @@ export class AgentSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Auto-archive expired items')
-			.setDesc('Automatically mark memory items as stale when their expiry date passes.')
+			.setName(t('settings_auto_archive_name', L))
+			.setDesc(t('settings_auto_archive_desc', L))
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.autoArchiveExpiredItems)
 				.onChange(async (value) => {
@@ -304,8 +323,8 @@ export class AgentSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Trace retention (days)')
-			.setDesc('Raw API traces older than this are deleted automatically on load.')
+			.setName(t('settings_trace_retention_name', L))
+			.setDesc(t('settings_trace_retention_desc', L))
 			.addText(text => text
 				.setValue(String(this.plugin.settings.traceRetentionDays))
 				.onChange(async (value) => {
@@ -317,11 +336,11 @@ export class AgentSettingTab extends PluginSettingTab {
 				}));
 
 		// — Session —
-		containerEl.createEl('h3', { text: 'Session' });
+		containerEl.createEl('h3', { text: t('settings_session_section', L) });
 
 		new Setting(containerEl)
-			.setName('Idle timeout (minutes)')
-			.setDesc('Minutes of inactivity before the session is automatically finalized and memory is extracted. Set to 0 to disable.')
+			.setName(t('settings_idle_timeout_name', L))
+			.setDesc(t('settings_idle_timeout_desc', L))
 			.addText(text => text
 				.setValue(String(this.plugin.settings.idleTimeoutMinutes))
 				.onChange(async (value) => {

@@ -17,7 +17,7 @@ export const CURATED_MODELS: CuratedModel[] = [
 		inputPricePerM: 0.14,
 		outputPricePerM: 0.40,
 		tier: 'cheap',
-		zdr: false,
+		zdr: true,
 		description: 'Ideal para chats cotidianos, asistentes de productividad, compañeros virtuales sencillos; buena personalidad con instrucciones claras.',
 	},
 	{
@@ -27,7 +27,7 @@ export const CURATED_MODELS: CuratedModel[] = [
 		inputPricePerM: 0.26,
 		outputPricePerM: 0.38,
 		tier: 'cheap',
-		zdr: false,
+		zdr: true,
 		description: 'Ideal para agentes técnicos o de ayuda con tareas concretas (código, datos, análisis); menos expresivo emocionalmente pero muy preciso.',
 	},
 	{
@@ -37,7 +37,7 @@ export const CURATED_MODELS: CuratedModel[] = [
 		inputPricePerM: 0.30,
 		outputPricePerM: 1.20,
 		tier: 'cheap',
-		zdr: false,
+		zdr: true,
 		description: 'Ideal para agentes que gestionan conversaciones largas o con mucho contexto acumulado; aguanta bien memorias extensas.',
 	},
 	{
@@ -47,7 +47,7 @@ export const CURATED_MODELS: CuratedModel[] = [
 		inputPricePerM: 0.20,
 		outputPricePerM: 1.25,
 		tier: 'cheap',
-		zdr: false,
+		zdr: true,
 		description: 'Ideal para agentes de respuesta rápida, asistentes de uso frecuente; fluido y natural para usuarios no técnicos.',
 	},
 	{
@@ -57,7 +57,7 @@ export const CURATED_MODELS: CuratedModel[] = [
 		inputPricePerM: 0.19,
 		outputPricePerM: 1.56,
 		tier: 'cheap',
-		zdr: false,
+		zdr: true,
 		description: 'Ideal para usuarios multilingüe o contextos internacionales; buena coherencia en conversaciones largas.',
 	},
 	{

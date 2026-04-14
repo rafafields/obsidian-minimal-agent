@@ -24,26 +24,24 @@
 	align-items: center;
 	justify-content: center;
 	flex: 1;
-	gap: 12px;
+	gap: 8px;
 	padding: 24px;
 	text-align: center;
 }
 
-.agent-finalizing .agent-mascot-img {
+.agent-finalizing .agent-wizard-mascot-img {
 	width: 64px;
 	height: 64px;
 }
 
-.agent-finalizing-title {
+.agent-finalizing h2 {
 	font-size: var(--font-ui-medium);
 	font-weight: 600;
-	color: var(--text-normal);
+	margin: 0;
 }
 
-.agent-finalizing-status {
-	font-size: var(--font-ui-small);
-	color: var(--text-muted);
-	font-style: italic;
+.agent-finalizing .agent-wizard-loading-status {
+	margin: 0;
 }
 
 /* ─── Messages area ───────────────────────────────────────────────────────── */
@@ -343,6 +341,121 @@
 	font-size: var(--font-ui-smaller);
 }
 
+.agent-wizard-link-hint {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin: -4px 0 12px;
+}
+
+/* ─── Wizard step 2 custom layout ─────────────────────────────────────────── */
+
+.agent-wizard-separator {
+	border: none;
+	border-top: 1px solid var(--background-modifier-border);
+	margin: 20px 0;
+}
+
+.agent-wizard-section-title {
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	color: var(--text-normal);
+	margin: 0 0 4px;
+}
+
+.agent-wizard-field {
+	margin-bottom: 12px;
+}
+
+.agent-wizard-field__label {
+	display: block;
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+	color: var(--text-normal);
+	margin-bottom: 6px;
+}
+
+.agent-wizard-field__input {
+	width: 100%;
+	box-sizing: border-box;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: 6px 10px;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-family: inherit;
+	height: var(--input-height, 32px);
+}
+
+.agent-wizard-field__input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+/* Let Obsidian's .dropdown class handle arrow + appearance; we only add width */
+.agent-wizard-field__select {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* ZDR inline link (wizard desc + settings desc) */
+.agent-wizard-zdr-link {
+	cursor: pointer;
+	font-weight: 500;
+}
+
+.agent-wizard-zdr-link:hover {
+	text-decoration: underline;
+}
+
+/* ─── Wizard model card ────────────────────────────────────────────────────── */
+
+.agent-wizard-model-card {
+	position: relative;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: 12px 14px;
+	margin-top: 4px;
+}
+
+.agent-wizard-model-card__header {
+	margin-bottom: 6px;
+	padding-right: 48px;
+}
+
+.agent-wizard-model-card__name {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.agent-wizard-model-card__zdr {
+	position: absolute;
+	top: 10px;
+	right: 12px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	color: var(--interactive-accent);
+	border: 1px solid var(--interactive-accent);
+	border-radius: 3px;
+	padding: 2px 6px;
+	line-height: 1.4;
+}
+
+.agent-wizard-model-card__price {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-bottom: 5px;
+}
+
+.agent-wizard-model-card__desc {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
 .agent-wizard-loading-status {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
@@ -422,9 +535,6 @@
 	font-weight: 500;
 }
 
-.agent-model-info__zdr {
-	color: var(--color-green);
-}
 
 .agent-model-info__desc {
 	line-height: 1.4;
