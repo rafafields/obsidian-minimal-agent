@@ -226,36 +226,11 @@
 .agent-ctx-info--over { color: var(--color-red); }
 .agent-ctx-info--muted { color: var(--text-faint); }
 
-/* ─── Face avatar keyframes ───────────────────────────────────────────────── */
+/* ─── Mascot float animation ──────────────────────────────────────────────── */
 
-@keyframes agent-blink {
-	0%, 90%, 100% { transform: scaleY(1); }
-	95%           { transform: scaleY(.05); }
-}
-@keyframes agent-think-dart {
-	0%, 100% { transform: translateX(0); }
-	30%      { transform: translateX(1.5px); }
-	60%      { transform: translateX(-1.5px); }
-}
-@keyframes agent-mouth-talk {
-	0%, 100% { transform: scaleY(.3); }
-	50%      { transform: scaleY(1); }
-}
-@keyframes agent-spin-ring {
-	from { transform: rotate(0deg); }
-	to   { transform: rotate(360deg); }
-}
 @keyframes agent-float {
 	0%, 100% { transform: translateY(0); }
 	50%      { transform: translateY(-2px); }
-}
-
-/* ─── Face SVG element ────────────────────────────────────────────────────── */
-
-.agent-face-svg {
-	width: 100%;
-	height: 100%;
-	overflow: visible;
 }
 
 /* ─── Chat mascot header ──────────────────────────────────────────────────── */
@@ -273,7 +248,30 @@
 	width: 36px;
 	height: 36px;
 	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	animation: agent-float 3.5s ease-in-out infinite;
+}
+
+.agent-mascot-img .agent-mascot-png,
+.agent-wizard-mascot-img .agent-mascot-png {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	display: block;
+}
+
+.agent-mascot-img .agent-mascot-emoji-text {
+	font-size: 26px;
+	line-height: 1;
+	display: block;
+}
+
+.agent-wizard-mascot-img .agent-mascot-emoji-text {
+	font-size: 54px;
+	line-height: 1;
+	display: block;
 }
 
 .agent-chat-header-name {
@@ -305,6 +303,9 @@
 .agent-wizard-mascot-img {
 	width: 72px;
 	height: 72px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .agent-wizard-progress {
@@ -582,4 +583,81 @@
 .agent-soul-add-btn:hover {
 	border-color: var(--interactive-accent);
 	color: var(--text-normal);
+}
+
+/* ─── Emoji picker ────────────────────────────────────────────────────────── */
+
+.agent-emoji-wrap {
+	position: relative;
+	display: inline-block;
+}
+
+.agent-emoji-trigger {
+	font-size: 1.4rem;
+	line-height: 1;
+	padding: 4px 8px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	transition: border-color 0.1s;
+}
+
+.agent-emoji-trigger:hover {
+	border-color: var(--interactive-accent);
+}
+
+.agent-emoji-panel {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 1000;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+	padding: 10px;
+	width: 260px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.agent-emoji-cat-label {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	margin: 8px 0 4px;
+}
+
+.agent-emoji-cat-label:first-child {
+	margin-top: 0;
+}
+
+.agent-emoji-grid {
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	gap: 2px;
+}
+
+.agent-emoji-btn {
+	font-size: 1.15rem;
+	line-height: 1;
+	padding: 4px 2px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	text-align: center;
+	transition: background 0.1s, border-color 0.1s;
+}
+
+.agent-emoji-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.agent-emoji-btn.is-selected {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
 }

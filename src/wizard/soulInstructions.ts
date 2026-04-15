@@ -41,7 +41,38 @@ Describe the style as a consequence of the character above. Do not state rules; 
 
 ### Core tension
 One paragraph: the hardest internal conflict in this soul and how it resolves it. This is what makes the document robust rather than decorative.
+
+After the Core tension section, append exactly one final line (outside any section):
+LOADING_PHRASES: ["phrase 1", "phrase 2", ...]
+
+Rules for LOADING_PHRASES:
+- 5 to 8 short phrases, max 8 words each
+- Gerund / present-participle form — the character narrating its own process (e.g. "Thinking...", "Tracing the pattern...", "Reorganizing the pieces...")
+- Match the language requested for the document
+- Reflect the soul's unique personality and voice — not generic filler
+- Varied in rhythm and structure (avoid starting every phrase the same way)
+- Examples of style (not content): "Pensando...", "Trazando el hilo...", "Reorganizando las piezas...", "Conectando los puntos...", "Verificando cada detalle..."
 `.trim();
+
+/**
+ * Extracts and strips the LOADING_PHRASES marker from a generated soul body.
+ * Returns the phrases array and the clean body without that line.
+ */
+export function parseLoadingPhrases(body: string): { phrases: string[]; cleanBody: string } {
+	const idx = body.lastIndexOf('\nLOADING_PHRASES:');
+	if (idx === -1) return { phrases: [], cleanBody: body };
+	const segment = body.slice(idx + 1);
+	const jsonMatch = segment.match(/LOADING_PHRASES:\s*(\[[\s\S]*?\])/);
+	if (!jsonMatch) return { phrases: [], cleanBody: body };
+	try {
+		const parsed = JSON.parse(jsonMatch[1] ?? '[]') as unknown;
+		if (!Array.isArray(parsed)) return { phrases: [], cleanBody: body };
+		const phrases = (parsed as unknown[]).filter((p): p is string => typeof p === 'string');
+		return { phrases, cleanBody: body.slice(0, idx).trimEnd() };
+	} catch {
+		return { phrases: [], cleanBody: body };
+	}
+}
 
 export const USER_GENERATION_PROMPT = `
 You are building a user model for a personal AI assistant.

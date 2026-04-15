@@ -2,11 +2,12 @@ import { App, Modal, Notice, Setting } from 'obsidian';
 import type MinimalAgentPlugin from '../main';
 import type { VaultManager } from '../vault/VaultManager';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
-import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT } from './soulInstructions';
+import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, USER_GENERATION_PROMPT, parseLoadingPhrases } from './soulInstructions';
 import { calcCost, formatCost } from '../utils/tokens';
 import type { LLMUsage } from '../types';
 import { createMascotImg, type MascotState } from '../ui/mascot';
 import { LoadingScreen } from '../ui/LoadingScreen';
+import { EmojiPicker } from '../ui/EmojiPicker';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
 import { SoulManager } from '../souls/SoulManager';
 import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
@@ -30,9 +31,10 @@ type FinishState = 'loading' | 'done' | 'error';
 export class SetupWizard extends Modal {
 	private step = 1;
 	private agentName: string;
-	private soulEmoji = '✨';
+	private soulEmoji = '🤖';
 	private apiKey: string;
 	private modelSlug: string;
+	private soulModelSlug = '';
 	private corePurpose = '';
 	private coreValues = '';
 	private voiceTone = '';
@@ -306,13 +308,10 @@ export class SetupWizard extends Modal {
 				.setValue(this.agentName)
 				.onChange(v => { this.agentName = v.trim(); }));
 
-		new Setting(contentEl)
+		const emojiSetting = new Setting(contentEl)
 			.setName(t('soul_emoji', L))
-			.setDesc(t('soul_emoji_desc', L))
-			.addText(text => text
-				.setPlaceholder('✨')
-				.setValue(this.soulEmoji)
-				.onChange(v => { this.soulEmoji = v.trim() || '✨'; }));
+			.setDesc(t('soul_emoji_desc', L));
+		new EmojiPicker(emojiSetting.controlEl, this.soulEmoji, (v) => { this.soulEmoji = v; });
 
 		new Setting(contentEl)
 			.setName(t('core_purpose', L))
@@ -343,6 +342,41 @@ export class SetupWizard extends Modal {
 					.onChange(v => { this.voiceTone = v; });
 				ta.inputEl.rows = 3;
 			});
+
+		// — Soul-specific model override —
+		const isCustomModel = !!this.soulModelSlug && !findCuratedModel(this.soulModelSlug);
+		const modelSettingEl = contentEl.createDiv();
+		const modelSetting = new Setting(modelSettingEl)
+			.setName(t('model', L))
+			.setDesc(t('soul_model_desc', L));
+		const modelSelectEl = modelSetting.controlEl.createEl('select', { cls: 'dropdown' });
+		modelSelectEl.createEl('option', { text: t('soul_model_global', L), value: '' });
+		for (const m of CURATED_MODELS) {
+			modelSelectEl.createEl('option', { text: `${m.displayName} (${m.provider})`, value: m.slug });
+		}
+		modelSelectEl.createEl('option', { text: 'Custom…', value: CUSTOM_MODEL_OPTION });
+		modelSelectEl.value = isCustomModel ? CUSTOM_MODEL_OPTION : (this.soulModelSlug || '');
+
+		const customModelEl = modelSettingEl.createDiv({ cls: 'agent-wizard-field' });
+		customModelEl.style.display = isCustomModel ? '' : 'none';
+		customModelEl.createEl('label', { text: t('custom_model_slug', L), cls: 'agent-wizard-field__label' });
+		const customModelInput = customModelEl.createEl('input', {
+			cls: 'agent-wizard-field__input',
+			attr: { type: 'text', placeholder: 'provider/model-name' },
+		});
+		customModelInput.value = isCustomModel ? this.soulModelSlug : '';
+		customModelInput.addEventListener('input', () => { this.soulModelSlug = customModelInput.value.trim(); });
+
+		modelSelectEl.addEventListener('change', () => {
+			const v = modelSelectEl.value;
+			if (v === CUSTOM_MODEL_OPTION) {
+				customModelEl.style.display = '';
+				this.soulModelSlug = customModelInput.value.trim();
+			} else {
+				customModelEl.style.display = 'none';
+				this.soulModelSlug = v;
+			}
+		});
 
 		this.renderNav(
 			() => { this.step = 3; this.render(); },
@@ -563,10 +597,14 @@ export class SetupWizard extends Modal {
 
 		this.updateLoadingStatus(t('wizard_loading_soul', L));
 		let soulBody: string;
+		let soulPhrases: string[] = [];
 		let soulUsage: import('../types').LLMUsage | null = null;
 		try {
 			const result = soulFormHasContent ? await this.generateSoul() : null;
-			soulBody = result?.body ?? SOUL_FALLBACK;
+			const rawBody = result?.body ?? SOUL_FALLBACK;
+			const parsed = parseLoadingPhrases(rawBody);
+			soulBody = parsed.cleanBody;
+			soulPhrases = parsed.phrases;
 			soulUsage = result?.usage ?? null;
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -605,7 +643,7 @@ export class SetupWizard extends Modal {
 			await this.vaultManager.ensurePath('_agent/memory/items/_pending');
 			await this.vaultManager.ensurePath('_system/traces');
 
-			await this.vaultManager.writeFile(`_agent/souls/${soulId}.md`, [
+			const soulFmLines = [
 				'---',
 				`name: "${this.agentName || 'Agent'}"`,
 				`emoji: ${this.soulEmoji}`,
@@ -614,10 +652,13 @@ export class SetupWizard extends Modal {
 				`created_at: ${date}`,
 				`updated_at: ${date}`,
 				'origin: hybrid',
-				'---',
-				'',
-				soulBody,
-			].join('\n'));
+			];
+			if (this.soulModelSlug) soulFmLines.push(`model_slug: ${this.soulModelSlug}`);
+			if (soulPhrases.length > 0) {
+				soulFmLines.push(`loading_phrases: [${soulPhrases.map(p => `"${p.replace(/"/g, '\\"')}"`).join(', ')}]`);
+			}
+			soulFmLines.push('---', '', soulBody);
+			await this.vaultManager.writeFile(`_agent/souls/${soulId}.md`, soulFmLines.join('\n'));
 
 			await this.vaultManager.writeFile('_agent/user.md', [
 				'---',

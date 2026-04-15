@@ -3,6 +3,8 @@ export interface SoulMeta {
 	name: string;
 	emoji: string;
 	path: string;
+	model_slug?: string;
+	loading_phrases?: string[];
 }
 
 export type MemoryState = 'draft' | 'active' | 'stale' | 'archived';

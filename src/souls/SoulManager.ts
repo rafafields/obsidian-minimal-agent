@@ -29,7 +29,14 @@ export class SoulManager {
 			const { frontmatter } = this.parser.parse(content);
 			const name = typeof frontmatter['name'] === 'string' ? frontmatter['name'] : id;
 			const emoji = typeof frontmatter['emoji'] === 'string' ? frontmatter['emoji'] : '✨';
-			souls.push({ id, name, emoji, path: filePath });
+			const model_slug = typeof frontmatter['model_slug'] === 'string' && frontmatter['model_slug']
+				? frontmatter['model_slug']
+				: undefined;
+			const rawPhrases = frontmatter['loading_phrases'];
+			const loading_phrases = Array.isArray(rawPhrases)
+				? (rawPhrases as unknown[]).filter((p): p is string => typeof p === 'string')
+				: undefined;
+			souls.push({ id, name, emoji, path: filePath, model_slug, loading_phrases });
 		}
 
 		// Always show 'default' first if it exists

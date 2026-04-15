@@ -7,6 +7,7 @@ import { createMascotImg, type MascotState } from './mascot';
 import { SoulGeneratorModal } from '../souls/SoulGeneratorModal';
 import { t } from '../utils/language';
 import { LoadingScreen } from './LoadingScreen';
+import { LOADING_PHRASES } from './loadingPhrases';
 
 export const CHAT_VIEW_TYPE = 'agent-chat';
 
@@ -31,6 +32,7 @@ export class ChatView extends ItemView {
 	private statusEl!: HTMLElement;
 	private loadingEl: HTMLElement | null = null;
 	private setMascotState!: (state: MascotState) => void;
+	private setMascotEmoji!: (emoji: string) => void;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -64,8 +66,9 @@ export class ChatView extends ItemView {
 
 		// — Mascot header —
 		const headerEl = this.chatEl.createDiv({ cls: 'agent-chat-header' });
-		const { setState } = createMascotImg(headerEl, 'idle');
+		const { setState, setEmoji } = createMascotImg(headerEl, 'idle');
 		this.setMascotState = setState;
+		this.setMascotEmoji = setEmoji;
 		this.headerNameEl = headerEl.createDiv({ cls: 'agent-chat-header-name', text: this.soulDisplayName });
 
 		// Soul selector
@@ -78,7 +81,8 @@ export class ChatView extends ItemView {
 			if (soul) {
 				this.soulDisplayName = soul.name;
 				this.headerNameEl.setText(soul.name);
-				}
+				this.setMascotEmoji(soul.emoji);
+			}
 		});
 
 		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: t('chat_create_soul_title', this.plugin.settings.language) } });
@@ -159,6 +163,7 @@ export class ChatView extends ItemView {
 		if (activeSoul) {
 			this.soulDisplayName = activeSoul.name;
 			this.headerNameEl.setText(activeSoul.name);
+			this.setMascotEmoji(activeSoul.emoji);
 		}
 	}
 
@@ -201,9 +206,11 @@ export class ChatView extends ItemView {
 			const dropped = result.droppedItems > 0 ? ` · ${result.droppedItems} items dropped` : '';
 			this.statusEl.setText(`~${contextTokens + transcriptTokens} tokens${dropped}`);
 
+			const activeSoul = this.soulsCache.find(s => s.id === this.activeSoulId);
+			const modelSlug = activeSoul?.model_slug || this.plugin.settings.modelSlug;
 			const client = new OpenRouterClient(
 				this.plugin.settings.apiKey,
-				this.plugin.settings.modelSlug,
+				modelSlug,
 			);
 			const { content: response, usage } = await client.chat(messages);
 
@@ -346,6 +353,12 @@ export class ChatView extends ItemView {
 		this.finalizationInProgress = true;
 		this.clearIdleTimer();
 
+		const activeSoul = this.soulsCache.find(s => s.id === this.activeSoulId);
+		if (activeSoul) this.finalizingScreen.setEmoji(activeSoul.emoji);
+		const soulPhrases = activeSoul?.loading_phrases ?? [];
+		if (soulPhrases.length > 0) this.finalizingScreen.startPhrases(soulPhrases);
+		this.finalizingScreen.startStatusPhrases(LOADING_PHRASES);
+
 		this.chatEl.hide();
 		this.finalizingEl.show();
 
@@ -356,6 +369,8 @@ export class ChatView extends ItemView {
 			this.statusEl.setText('');
 			this.setMascotState('idle');
 		} finally {
+			this.finalizingScreen.stopPhrases();
+			this.finalizingScreen.stopStatusPhrases();
 			this.finalizationInProgress = false;
 			this.finalizingEl.hide();
 			this.chatEl.show();

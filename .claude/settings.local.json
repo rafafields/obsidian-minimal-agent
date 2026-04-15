@@ -6,5 +6,8 @@
       "Read(//mnt/c/Obsidian/Minimal Agent/**)",
       "Read(//c//**)"
     ]
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true
   }
 }
