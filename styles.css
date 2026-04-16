@@ -553,36 +553,77 @@
 	gap: 4px;
 }
 
-.agent-soul-selector {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
+.agent-soul-switch-btn {
+	background: var(--interactive-accent);
+	border: none;
 	border-radius: 4px;
-	color: var(--text-muted);
-	font-size: var(--font-smaller);
-	padding: 2px 6px;
+	color: var(--text-on-accent);
 	cursor: pointer;
-	max-width: 140px;
+	font-size: var(--font-smaller);
+	font-weight: 600;
+	line-height: 1;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
 }
 
-.agent-soul-selector:hover {
-	border-color: var(--interactive-accent);
+.agent-soul-switch-btn:hover {
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+
+.agent-soul-dropdown {
+	position: fixed;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: var(--shadow-s);
+	z-index: 1000;
+	min-width: 160px;
+	overflow: hidden;
+}
+
+.agent-soul-dropdown-item {
+	padding: 6px 12px;
+	cursor: pointer;
+	font-size: var(--font-small);
 	color: var(--text-normal);
+}
+
+.agent-soul-dropdown-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.agent-soul-dropdown-item.is-active {
+	color: var(--interactive-accent);
+	font-weight: 600;
 }
 
 .agent-soul-add-btn {
-	background: transparent;
-	border: 1px solid var(--background-modifier-border);
+	background: var(--interactive-accent);
+	border: none;
 	border-radius: 4px;
-	color: var(--text-muted);
+	color: var(--text-on-accent);
 	cursor: pointer;
 	font-size: var(--font-smaller);
+	font-weight: 600;
 	line-height: 1;
-	padding: 2px 6px;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
 }
 
 .agent-soul-add-btn:hover {
-	border-color: var(--interactive-accent);
-	color: var(--text-normal);
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
 }
 
 /* ─── Emoji picker ────────────────────────────────────────────────────────── */

@@ -7,7 +7,7 @@ import { calcCost, formatCost } from '../utils/tokens';
 import type { LLMUsage } from '../types';
 import { createMascotImg, type MascotState } from '../ui/mascot';
 import { LoadingScreen } from '../ui/LoadingScreen';
-import { EmojiPicker } from '../ui/EmojiPicker';
+import { SoulForm, type SoulFormState } from '../ui/SoulForm';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
 import { SoulManager } from '../souls/SoulManager';
 import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
@@ -30,17 +30,15 @@ type FinishState = 'loading' | 'done' | 'error';
 
 export class SetupWizard extends Modal {
 	private step = 1;
-	private agentName: string;
-	private soulEmoji = '🤖';
+	private soulFormState: SoulFormState = { name: '', emoji: '🤖', corePurpose: '', coreValues: '', voiceTone: '', soulModelSlug: '' };
 	private apiKey: string;
 	private modelSlug: string;
-	private soulModelSlug = '';
-	private corePurpose = '';
-	private coreValues = '';
-	private voiceTone = '';
 	private workStyle = '';
 	private commPreferences = '';
 	private interests = '';
+	private longTermGoals = '';
+	private personalContext = '';
+	private patternsToAvoid = '';
 	private selectedTags: Set<string>;
 	private language: string;
 	private finishState: FinishState = 'loading';
@@ -54,7 +52,6 @@ export class SetupWizard extends Modal {
 		private vaultManager: VaultManager,
 	) {
 		super(app);
-		this.agentName = '';
 		this.apiKey = plugin.settings.apiKey;
 		this.modelSlug = plugin.settings.modelSlug;
 		this.selectedTags = new Set(SUGGESTED_TAGS);
@@ -286,6 +283,36 @@ export class SetupWizard extends Modal {
 				ta.inputEl.rows = 3;
 			});
 
+		new Setting(contentEl)
+			.setName(t('wizard_long_term_goals_name', L))
+			.setDesc(t('wizard_long_term_goals_desc', L))
+			.addTextArea(ta => {
+				ta.setValue(this.longTermGoals)
+					.setPlaceholder(t('wizard_long_term_goals_ph', L))
+					.onChange(v => { this.longTermGoals = v; });
+				ta.inputEl.rows = 3;
+			});
+
+		new Setting(contentEl)
+			.setName(t('wizard_personal_context_name', L))
+			.setDesc(t('wizard_personal_context_desc', L))
+			.addTextArea(ta => {
+				ta.setValue(this.personalContext)
+					.setPlaceholder(t('wizard_personal_context_ph', L))
+					.onChange(v => { this.personalContext = v; });
+				ta.inputEl.rows = 3;
+			});
+
+		new Setting(contentEl)
+			.setName(t('wizard_patterns_to_avoid_name', L))
+			.setDesc(t('wizard_patterns_to_avoid_desc', L))
+			.addTextArea(ta => {
+				ta.setValue(this.patternsToAvoid)
+					.setPlaceholder(t('wizard_patterns_to_avoid_ph', L))
+					.onChange(v => { this.patternsToAvoid = v; });
+				ta.inputEl.rows = 3;
+			});
+
 		this.renderNav(
 			() => { this.step = 2; this.render(); },
 			() => { this.step = 4; this.render(); },
@@ -300,83 +327,11 @@ export class SetupWizard extends Modal {
 		contentEl.createEl('h2', { text: t('wizard_define_title', L) });
 		contentEl.createEl('p', { text: t('wizard_define_desc', L), cls: 'agent-wizard-desc' });
 
-		new Setting(contentEl)
-			.setName(t('wizard_agent_name_name', L))
-			.setDesc(t('wizard_agent_name_desc', L))
-			.addText(text => text
-				.setPlaceholder('Agent')
-				.setValue(this.agentName)
-				.onChange(v => { this.agentName = v.trim(); }));
-
-		const emojiSetting = new Setting(contentEl)
-			.setName(t('soul_emoji', L))
-			.setDesc(t('soul_emoji_desc', L));
-		new EmojiPicker(emojiSetting.controlEl, this.soulEmoji, (v) => { this.soulEmoji = v; });
-
-		new Setting(contentEl)
-			.setName(t('core_purpose', L))
-			.setDesc(t('core_purpose_desc', L))
-			.addTextArea(ta => {
-				ta.setValue(this.corePurpose)
-					.setPlaceholder(t('core_purpose_placeholder', L))
-					.onChange(v => { this.corePurpose = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		new Setting(contentEl)
-			.setName(t('core_values', L))
-			.setDesc(t('core_values_desc', L))
-			.addTextArea(ta => {
-				ta.setValue(this.coreValues)
-					.setPlaceholder(t('core_values_placeholder', L))
-					.onChange(v => { this.coreValues = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		new Setting(contentEl)
-			.setName(t('voice_tone', L))
-			.setDesc(t('voice_tone_desc', L))
-			.addTextArea(ta => {
-				ta.setValue(this.voiceTone)
-					.setPlaceholder(t('voice_tone_placeholder', L))
-					.onChange(v => { this.voiceTone = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		// — Soul-specific model override —
-		const isCustomModel = !!this.soulModelSlug && !findCuratedModel(this.soulModelSlug);
-		const modelSettingEl = contentEl.createDiv();
-		const modelSetting = new Setting(modelSettingEl)
-			.setName(t('model', L))
-			.setDesc(t('soul_model_desc', L));
-		const modelSelectEl = modelSetting.controlEl.createEl('select', { cls: 'dropdown' });
-		modelSelectEl.createEl('option', { text: t('soul_model_global', L), value: '' });
-		for (const m of CURATED_MODELS) {
-			modelSelectEl.createEl('option', { text: `${m.displayName} (${m.provider})`, value: m.slug });
-		}
-		modelSelectEl.createEl('option', { text: 'Custom…', value: CUSTOM_MODEL_OPTION });
-		modelSelectEl.value = isCustomModel ? CUSTOM_MODEL_OPTION : (this.soulModelSlug || '');
-
-		const customModelEl = modelSettingEl.createDiv({ cls: 'agent-wizard-field' });
-		customModelEl.style.display = isCustomModel ? '' : 'none';
-		customModelEl.createEl('label', { text: t('custom_model_slug', L), cls: 'agent-wizard-field__label' });
-		const customModelInput = customModelEl.createEl('input', {
-			cls: 'agent-wizard-field__input',
-			attr: { type: 'text', placeholder: 'provider/model-name' },
-		});
-		customModelInput.value = isCustomModel ? this.soulModelSlug : '';
-		customModelInput.addEventListener('input', () => { this.soulModelSlug = customModelInput.value.trim(); });
-
-		modelSelectEl.addEventListener('change', () => {
-			const v = modelSelectEl.value;
-			if (v === CUSTOM_MODEL_OPTION) {
-				customModelEl.style.display = '';
-				this.soulModelSlug = customModelInput.value.trim();
-			} else {
-				customModelEl.style.display = 'none';
-				this.soulModelSlug = v;
-			}
-		});
+		new SoulForm(contentEl, this.soulFormState, L, {
+			name: t('wizard_agent_name_name', L),
+			desc: t('wizard_agent_name_desc', L),
+			placeholder: 'Agent',
+		}).render();
 
 		this.renderNav(
 			() => { this.step = 3; this.render(); },
@@ -427,7 +382,7 @@ export class SetupWizard extends Modal {
 			this.renderMascot(contentEl, 'inlove');
 			contentEl.createEl('h2', { text: t('wizard_done_title', L) });
 			contentEl.createEl('p', {
-				text: t('wizard_done_desc', L, { name: this.agentName || 'Agent', tags: String(this.selectedTags.size) }),
+				text: t('wizard_done_desc', L, { name: this.soulFormState.name || 'Agent', tags: String(this.selectedTags.size) }),
 				cls: 'agent-wizard-desc',
 			});
 			if (this.generationCost !== null) {
@@ -501,22 +456,22 @@ export class SetupWizard extends Modal {
 
 	// — Soul generation —
 
-	private async generateSoul(): Promise<{ body: string; usage: LLMUsage }> {
-		const client = new OpenRouterClient(
-			this.apiKey,
-			this.modelSlug || 'qwen/qwen3.5-27b',
-		);
+	private makeClient(): OpenRouterClient {
+		return new OpenRouterClient(this.apiKey, this.modelSlug || 'qwen/qwen3.5-27b');
+	}
 
+	private async generateSoul(): Promise<{ body: string; usage: LLMUsage }> {
+		const s = this.soulFormState;
 		const userMessage = [
 			`Language: Write the entire document in ${this.language}.`,
 			'',
-			`Agent name: ${this.agentName || 'Agent'}`,
-			`Core purpose: ${this.corePurpose || 'Not specified.'}`,
-			`Core values: ${this.coreValues || 'Not specified.'}`,
-			`Voice and tone: ${this.voiceTone || 'Not specified.'}`,
+			`Agent name: ${s.name || 'Agent'}`,
+			`Core purpose: ${s.corePurpose || 'Not specified.'}`,
+			`Core values: ${s.coreValues || 'Not specified.'}`,
+			`Voice and tone: ${s.voiceTone || 'Not specified.'}`,
 		].join('\n');
 
-		const { content, usage } = await client.chat([
+		const { content, usage } = await this.makeClient().chat([
 			{ role: 'system', content: SOUL_GENERATION_PROMPT },
 			{ role: 'user', content: userMessage },
 		], { temperature: 0.7 });
@@ -524,10 +479,6 @@ export class SetupWizard extends Modal {
 	}
 
 	private async generateUser(): Promise<{ body: string; usage: LLMUsage }> {
-		const client = new OpenRouterClient(
-			this.apiKey,
-			this.modelSlug || 'qwen/qwen3.5-27b',
-		);
 
 		const userMessage = [
 			`Language: Write the entire document in ${this.language}.`,
@@ -535,9 +486,12 @@ export class SetupWizard extends Modal {
 			`Work style: ${this.workStyle || 'Not provided.'}`,
 			`Communication preferences: ${this.commPreferences || 'Not provided.'}`,
 			`Current areas of focus: ${this.interests || 'Not provided.'}`,
+			`Long-term goals: ${this.longTermGoals || 'Not provided.'}`,
+			`Personal context: ${this.personalContext || 'Not provided.'}`,
+			`Patterns to avoid: ${this.patternsToAvoid || 'Not provided.'}`,
 		].join('\n');
 
-		const { content, usage } = await client.chat([
+		const { content, usage } = await this.makeClient().chat([
 			{ role: 'system', content: USER_GENERATION_PROMPT },
 			{ role: 'user', content: userMessage },
 		], { temperature: 0.5 });
@@ -556,26 +510,38 @@ export class SetupWizard extends Modal {
 			'',
 			this.commPreferences || 'To be defined.',
 			'',
+			'## Long-term goals',
+			'',
+			this.longTermGoals || 'To be defined.',
+			'',
 			'## Current areas of focus',
 			'',
 			this.interests || 'To be defined.',
 			'',
 			'## Patterns to avoid',
 			'',
+			this.patternsToAvoid || 'To be defined.',
+			'',
 			'## Relevant personal context',
+			'',
+			this.personalContext || 'To be defined.',
 		].join('\n');
 	}
 
 	private async runFinish(): Promise<void> {
+		const s = this.soulFormState;
 		const soulFormHasContent = !!(
-			this.corePurpose.trim() ||
-			this.coreValues.trim() ||
-			this.voiceTone.trim()
+			s.corePurpose.trim() ||
+			s.coreValues.trim() ||
+			s.voiceTone.trim()
 		);
 		const userFormHasContent = !!(
 			this.workStyle.trim() ||
 			this.commPreferences.trim() ||
-			this.interests.trim()
+			this.interests.trim() ||
+			this.longTermGoals.trim() ||
+			this.personalContext.trim() ||
+			this.patternsToAvoid.trim()
 		);
 
 		// Kick off pricing fetch concurrently — it must not block generation
@@ -632,7 +598,7 @@ export class SetupWizard extends Modal {
 			const date = now.toISOString().slice(0, 10);
 			const datetime = now.toISOString().slice(0, 16);
 
-			const soulId = SoulManager.nameToId(this.agentName || 'Agent');
+			const soulId = SoulManager.nameToId(s.name || 'Agent');
 			this.plugin.settings.apiKey = this.apiKey;
 			this.plugin.settings.modelSlug = this.modelSlug || 'qwen/qwen3.5-27b';
 			this.plugin.settings.defaultSoul = soulId;
@@ -645,15 +611,15 @@ export class SetupWizard extends Modal {
 
 			const soulFmLines = [
 				'---',
-				`name: "${this.agentName || 'Agent'}"`,
-				`emoji: ${this.soulEmoji}`,
+				`name: "${s.name || 'Agent'}"`,
+				`emoji: ${s.emoji}`,
 				'kind: agent_soul',
 				'state: active',
 				`created_at: ${date}`,
 				`updated_at: ${date}`,
 				'origin: hybrid',
 			];
-			if (this.soulModelSlug) soulFmLines.push(`model_slug: ${this.soulModelSlug}`);
+			if (s.soulModelSlug) soulFmLines.push(`model_slug: ${s.soulModelSlug}`);
 			if (soulPhrases.length > 0) {
 				soulFmLines.push(`loading_phrases: [${soulPhrases.map(p => `"${p.replace(/"/g, '\\"')}"`).join(', ')}]`);
 			}

@@ -70,6 +70,7 @@ const EN = {
 	chat_saved_notice:       'Conversation saved to {path}',
 	chat_agent_error:        'Agent error: {msg}',
 	chat_create_soul_title:  'Create new soul',
+	chat_switch_soul_title:  'Switch soul',
 
 	// SetupWizard
 	wizard_step_of:             'Step {step} of {total}',
@@ -97,6 +98,15 @@ const EN = {
 	wizard_focus_name:          'Current areas of focus',
 	wizard_focus_desc:          'Topics or projects you\'re working on right now.',
 	wizard_focus_ph:            'Building an Obsidian plugin, learning TypeScript.',
+	wizard_long_term_goals_name: 'Long-term goals',
+	wizard_long_term_goals_desc: 'Aspirations or outcomes you\'re working toward over months or years.',
+	wizard_long_term_goals_ph:   'Launch an indie product. Publish a book. Become financially independent.',
+	wizard_personal_context_name: 'Personal context',
+	wizard_personal_context_desc: 'Anything the agent should know about your situation — life stage, constraints, background.',
+	wizard_personal_context_ph:   'Parent of two young kids. Working mostly evenings. Based in Madrid.',
+	wizard_patterns_to_avoid_name: 'Patterns to avoid',
+	wizard_patterns_to_avoid_desc: 'Behaviors, tones, or approaches you find unhelpful or frustrating.',
+	wizard_patterns_to_avoid_ph:   'Avoid unsolicited motivational framing. Don\'t pad responses.',
 
 	wizard_define_title:        'Define your agent',
 	wizard_define_desc:         'These fields generate _agent/souls/default.md — the stable identity of your agent. You can edit this file directly in Obsidian at any time.',
@@ -240,6 +250,7 @@ const ES: Partial<Record<TranslationKey, string>> = {
 	chat_saved_notice:        'Conversación guardada en {path}',
 	chat_agent_error:         'Error del agente: {msg}',
 	chat_create_soul_title:   'Crear nueva alma',
+	chat_switch_soul_title:   'Cambiar soul',
 
 	// SetupWizard
 	wizard_step_of:             'Paso {step} de {total}',
@@ -267,6 +278,15 @@ const ES: Partial<Record<TranslationKey, string>> = {
 	wizard_focus_name:          'Áreas de enfoque actuales',
 	wizard_focus_desc:          'Temas o proyectos en los que estás trabajando ahora.',
 	wizard_focus_ph:            'Construyendo un plugin de Obsidian, aprendiendo TypeScript.',
+	wizard_long_term_goals_name: 'Objetivos a largo plazo',
+	wizard_long_term_goals_desc: 'Aspiraciones o resultados hacia los que estás trabajando a lo largo de meses o años.',
+	wizard_long_term_goals_ph:   'Lanzar un producto indie. Publicar un libro. Lograr independencia financiera.',
+	wizard_personal_context_name: 'Contexto personal',
+	wizard_personal_context_desc: 'Cualquier cosa que el agente deba saber sobre tu situación: etapa vital, limitaciones, contexto.',
+	wizard_personal_context_ph:   'Padre/madre de dos hijos pequeños. Trabajo principalmente por las noches. Vivo en Madrid.',
+	wizard_patterns_to_avoid_name: 'Patrones a evitar',
+	wizard_patterns_to_avoid_desc: 'Comportamientos, tonos o enfoques que encuentras poco útiles o frustrantes.',
+	wizard_patterns_to_avoid_ph:   'Evita el lenguaje motivacional no solicitado. No rellenes las respuestas.',
 
 	wizard_define_title:        'Define tu agente',
 	wizard_define_desc:         'Estos campos generan _agent/souls/default.md — la identidad estable de tu agente. Puedes editar este archivo directamente en Obsidian en cualquier momento.',
@@ -278,7 +298,7 @@ const ES: Partial<Record<TranslationKey, string>> = {
 
 	wizard_loading_title:       'Configurando tu agente…',
 	wizard_loading_user:        'Generando user.md…',
-	wizard_loading_soul:        'Generando soul…',
+	wizard_loading_soul:        'Generando alma…',
 	wizard_loading_files:       'Escribiendo archivos del vault…',
 
 	wizard_done_title:          '¡Todo listo!',

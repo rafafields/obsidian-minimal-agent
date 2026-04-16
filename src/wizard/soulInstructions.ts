@@ -87,7 +87,7 @@ NEVER ask clarifying questions. Work with what you have.
 The assistant uses it to:
 - Adapt its communication style to this specific person
 - Know what context to assume without being told
-- Know what this person currently cares about
+- Know what this person currently cares about and aspires to
 - Know what behaviors to avoid
 
 Write in the third person — this is a document *about* the user, for the agent to read.
@@ -100,21 +100,24 @@ How this person works: rhythm, depth of focus, preferred contexts, cognitive pat
 ## Communication preferences
 How the agent should respond: length, format, tone, level of detail. 3–5 bullet points, each concrete enough to act on immediately.
 
+## Long-term goals
+The aspirations or outcomes this person is working toward over months or years. Synthesize from their stated goals and any context you can infer. One line per goal; add brief framing if useful.
+
 ## Current areas of focus
-The projects or topics this person is currently invested in. One line per item; add brief context if useful.
+The projects or topics this person is actively invested in right now. One line per item; add brief context if useful. Distinguish from long-term goals — these are immediate, active, tactical.
 
 ## Patterns to avoid
-Behaviors that would frustrate or not serve this person, inferred from everything above. 3–5 items. Phrase each as "Avoid…" or "Do not…".
+Behaviors that would frustrate or not serve this person. Use their stated preferences as the primary source; supplement with inferences from the rest. 3–5 items. Phrase each as "Avoid…" or "Do not…".
 
 ## Relevant personal context
-Cross-cutting insights that don't fit above but should inform engagement. 2–3 observations. Leave empty if nothing specific can be inferred.
+Cross-cutting insights about this person's situation, constraints, or background that should inform all interactions. Use their stated context as the primary source; supplement with observations that don't fit elsewhere. 2–4 sentences.
 
 # Rules
 
 - Do not copy user input verbatim. Synthesize and expand where useful.
 - Do not add, rename, or reorder sections.
-- Do not use generic boilerplate. If a section has nothing specific to say, keep it short.
-- Output only the five Markdown sections above — no frontmatter, no code fences, no preamble, no closing remarks.
+- Do not use generic boilerplate. If a section has nothing specific to say, keep it short but present.
+- Output only the six Markdown sections above — no frontmatter, no code fences, no preamble, no closing remarks.
 `.trim();
 
 export const SOUL_FALLBACK = `

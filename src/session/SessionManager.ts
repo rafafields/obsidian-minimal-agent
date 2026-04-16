@@ -211,7 +211,40 @@ export class SessionManager {
 		await this.vaultManager.writeFile(path, content);
 	}
 
-	// — active.md update —
+	// — active.md update (per-turn) —
+
+	async updateActiveMdFromTurn(lastResponse: string): Promise<void> {
+		const path = '_agent/memory/active.md';
+		const content = await this.vaultManager.readFile(path);
+		if (!content) return;
+
+		const summary = this.extractSummary(lastResponse, 3);
+		const now = new Date().toISOString().slice(0, 16);
+		const { frontmatter, body } = this.parser.parse(content);
+		const updatedBody = this.parser.updateSection(body, 'Current focus', summary);
+		await this.vaultManager.writeFile(
+			path,
+			this.parser.serialize({ ...frontmatter, updated_at: now }, updatedBody),
+		);
+	}
+
+	private extractSummary(text: string, maxSentences: number): string {
+		const trimmed = text.trim();
+		const sentenceEndRe = /[.!?]/g;
+		let match: RegExpExecArray | null;
+		let count = 0;
+		let endIdx = trimmed.length;
+		while ((match = sentenceEndRe.exec(trimmed)) !== null) {
+			count++;
+			if (count === maxSentences) {
+				endIdx = match.index + 1;
+				break;
+			}
+		}
+		return trimmed.slice(0, endIdx);
+	}
+
+	// — active.md update (post-session) —
 
 	private async updateActiveMdFromCandidates(
 		candidates: MemoryItemCandidate[],

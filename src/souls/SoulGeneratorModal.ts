@@ -1,24 +1,19 @@
-import { App, Modal, Notice, Setting } from 'obsidian';
+import { App, Modal, Notice } from 'obsidian';
 import type { VaultManager } from '../vault/VaultManager';
 import type { FrontmatterParser } from '../vault/FrontmatterParser';
 import { OpenRouterClient } from '../llm/OpenRouterClient';
 import { SOUL_GENERATION_PROMPT, SOUL_FALLBACK, parseLoadingPhrases } from '../wizard/soulInstructions';
 import { createMascotImg } from '../ui/mascot';
 import { LoadingScreen } from '../ui/LoadingScreen';
-import { EmojiPicker } from '../ui/EmojiPicker';
+import { SoulForm, type SoulFormState } from '../ui/SoulForm';
 import { SoulManager } from './SoulManager';
 import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
-import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
+import { Setting } from 'obsidian';
 
 type GenState = 'form' | 'generating' | 'done' | 'error';
 
 export class SoulGeneratorModal extends Modal {
-	private name = '';
-	private emoji = '🤖';
-	private corePurpose = '';
-	private coreValues = '';
-	private voiceTone = '';
-	private soulModelSlug = '';
+	private soulFormState: SoulFormState = { name: '', emoji: '🤖', corePurpose: '', coreValues: '', voiceTone: '', soulModelSlug: '' };
 	private language = detectDefaultLanguage();
 	private state: GenState = 'form';
 	private errorMsg = '';
@@ -67,83 +62,11 @@ export class SoulGeneratorModal extends Modal {
 		contentEl.createEl('h2', { text: t('soul_gen_title', L) });
 		contentEl.createEl('p', { text: t('soul_gen_desc', L), cls: 'agent-wizard-desc' });
 
-		new Setting(contentEl)
-			.setName(t('soul_gen_name_name', L))
-			.setDesc(t('soul_gen_name_desc', L))
-			.addText(text => text
-				.setPlaceholder(t('soul_gen_name_ph', L))
-				.setValue(this.name)
-				.onChange(v => { this.name = v.trim(); }));
-
-		const emojiSetting = new Setting(contentEl)
-			.setName(t('soul_emoji', L))
-			.setDesc(t('soul_emoji_desc', L));
-		new EmojiPicker(emojiSetting.controlEl, this.emoji, (v) => { this.emoji = v; });
-
-		new Setting(contentEl)
-			.setName(t('core_purpose', L))
-			.setDesc(t('core_purpose_desc', L))
-			.addTextArea(ta => {
-				ta.setValue(this.corePurpose)
-					.setPlaceholder(t('core_purpose_placeholder', L))
-					.onChange(v => { this.corePurpose = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		new Setting(contentEl)
-			.setName(t('core_values', L))
-			.setDesc(t('core_values_desc', L))
-			.addTextArea(ta => {
-				ta.setValue(this.coreValues)
-					.setPlaceholder(t('core_values_placeholder', L))
-					.onChange(v => { this.coreValues = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		new Setting(contentEl)
-			.setName(t('voice_tone', L))
-			.setDesc(t('voice_tone_desc', L))
-			.addTextArea(ta => {
-				ta.setValue(this.voiceTone)
-					.setPlaceholder(t('voice_tone_placeholder', L))
-					.onChange(v => { this.voiceTone = v; });
-				ta.inputEl.rows = 3;
-			});
-
-		// — Soul-specific model override —
-		const isCustomModel = !!this.soulModelSlug && !findCuratedModel(this.soulModelSlug);
-		const modelSettingEl = contentEl.createDiv();
-		const modelSetting = new Setting(modelSettingEl)
-			.setName(t('model', L))
-			.setDesc(t('soul_model_desc', L));
-		const modelSelectEl = modelSetting.controlEl.createEl('select', { cls: 'dropdown' });
-		modelSelectEl.createEl('option', { text: t('soul_model_global', L), value: '' });
-		for (const m of CURATED_MODELS) {
-			modelSelectEl.createEl('option', { text: `${m.displayName} (${m.provider})`, value: m.slug });
-		}
-		modelSelectEl.createEl('option', { text: 'Custom…', value: CUSTOM_MODEL_OPTION });
-		modelSelectEl.value = isCustomModel ? CUSTOM_MODEL_OPTION : (this.soulModelSlug || '');
-
-		const customModelEl = modelSettingEl.createDiv({ cls: 'agent-wizard-field' });
-		customModelEl.style.display = isCustomModel ? '' : 'none';
-		customModelEl.createEl('label', { text: t('custom_model_slug', L), cls: 'agent-wizard-field__label' });
-		const customModelInput = customModelEl.createEl('input', {
-			cls: 'agent-wizard-field__input',
-			attr: { type: 'text', placeholder: 'provider/model-name' },
-		});
-		customModelInput.value = isCustomModel ? this.soulModelSlug : '';
-		customModelInput.addEventListener('input', () => { this.soulModelSlug = customModelInput.value.trim(); });
-
-		modelSelectEl.addEventListener('change', () => {
-			const v = modelSelectEl.value;
-			if (v === CUSTOM_MODEL_OPTION) {
-				customModelEl.style.display = '';
-				this.soulModelSlug = customModelInput.value.trim();
-			} else {
-				customModelEl.style.display = 'none';
-				this.soulModelSlug = v;
-			}
-		});
+		new SoulForm(contentEl, this.soulFormState, L, {
+			name: t('soul_gen_name_name', L),
+			desc: t('soul_gen_name_desc', L),
+			placeholder: t('soul_gen_name_ph', L),
+		}).render();
 
 		new Setting(contentEl)
 			.setName(t('language', L))
@@ -159,7 +82,7 @@ export class SoulGeneratorModal extends Modal {
 
 		const generateBtn = navEl.createEl('button', { text: t('generate', L), cls: 'mod-cta' });
 		generateBtn.addEventListener('click', () => {
-			if (!this.name) {
+			if (!this.soulFormState.name) {
 				new Notice(t('soul_gen_name_required', L));
 				return;
 			}
@@ -189,7 +112,7 @@ export class SoulGeneratorModal extends Modal {
 		createMascotImg(wrapper, 'inlove', 'agent-wizard-mascot-img');
 		contentEl.createEl('h2', { text: t('soul_gen_done_title', L) });
 		contentEl.createEl('p', {
-			text: t('soul_gen_done_desc', L, { name: this.name, id: this.generatedId }),
+			text: t('soul_gen_done_desc', L, { name: this.soulFormState.name, id: this.generatedId }),
 			cls: 'agent-wizard-desc',
 		});
 
@@ -224,8 +147,9 @@ export class SoulGeneratorModal extends Modal {
 	// — Generation —
 
 	private async runGeneration(): Promise<void> {
-		const id = SoulManager.nameToId(this.name);
-		const hasContent = !!(this.corePurpose.trim() || this.coreValues.trim() || this.voiceTone.trim());
+		const s = this.soulFormState;
+		const id = SoulManager.nameToId(s.name);
+		const hasContent = !!(s.corePurpose.trim() || s.coreValues.trim() || s.voiceTone.trim());
 
 		this.setStatus(t('soul_gen_generating_soul', this.language));
 
@@ -235,13 +159,13 @@ export class SoulGeneratorModal extends Modal {
 			if (hasContent) {
 				const client = new OpenRouterClient(this.apiKey, this.modelSlug || 'qwen/qwen3.5-27b');
 				const userMessage = [
-					`Soul name: ${this.name}`,
+					`Soul name: ${s.name}`,
 					'',
-					`Core purpose: ${this.corePurpose}`,
+					`Core purpose: ${s.corePurpose}`,
 					'',
-					`Core values: ${this.coreValues}`,
+					`Core values: ${s.coreValues}`,
 					'',
-					`Voice and tone: ${this.voiceTone}`,
+					`Voice and tone: ${s.voiceTone}`,
 					'',
 					`Write the entire document in ${this.language}.`,
 				].join('\n');
@@ -267,15 +191,15 @@ export class SoulGeneratorModal extends Modal {
 			const date = now.toISOString().slice(0, 10);
 
 			const fm: Record<string, unknown> = {
-				name: this.name,
-				emoji: this.emoji,
+				name: s.name,
+				emoji: s.emoji,
 				kind: 'agent_soul',
 				state: 'active',
 				created_at: date,
 				updated_at: date,
 				origin: 'hybrid',
 			};
-			if (this.soulModelSlug) fm['model_slug'] = this.soulModelSlug;
+			if (s.soulModelSlug) fm['model_slug'] = s.soulModelSlug;
 			if (loadingPhrases.length > 0) fm['loading_phrases'] = loadingPhrases;
 
 			await this.vaultManager.writeFile(

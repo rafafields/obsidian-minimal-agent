@@ -31,6 +31,7 @@ export class ChatView extends ItemView {
 	private saveChatBtn!: HTMLButtonElement;
 	private statusEl!: HTMLElement;
 	private loadingEl: HTMLElement | null = null;
+	private soulDropdownEl: HTMLElement | null = null;
 	private setMascotState!: (state: MascotState) => void;
 	private setMascotEmoji!: (emoji: string) => void;
 
@@ -73,19 +74,19 @@ export class ChatView extends ItemView {
 
 		// Soul selector
 		const soulWrapEl = headerEl.createDiv({ cls: 'agent-soul-selector-wrap' });
-		const soulSelectEl = soulWrapEl.createEl('select', { cls: 'agent-soul-selector' });
-		soulSelectEl.createEl('option', { text: `✨ ${this.activeSoulId}`, value: this.activeSoulId });
-		soulSelectEl.addEventListener('change', () => {
-			this.activeSoulId = soulSelectEl.value;
-			const soul = this.soulsCache.find(s => s.id === this.activeSoulId);
-			if (soul) {
-				this.soulDisplayName = soul.name;
-				this.headerNameEl.setText(soul.name);
-				this.setMascotEmoji(soul.emoji);
-			}
+		const lang = this.plugin.settings.language;
+
+		const switchSoulBtn = soulWrapEl.createEl('button', {
+			text: '⇄',
+			cls: 'agent-soul-switch-btn',
+			attr: { title: t('chat_switch_soul_title', lang) },
+		});
+		switchSoulBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			this.toggleSoulDropdown(switchSoulBtn);
 		});
 
-		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: t('chat_create_soul_title', this.plugin.settings.language) } });
+		const soulAddBtn = soulWrapEl.createEl('button', { text: '+', cls: 'agent-soul-add-btn', attr: { title: t('chat_create_soul_title', lang) } });
 		soulAddBtn.addEventListener('click', () => {
 			new SoulGeneratorModal(
 				this.app,
@@ -93,12 +94,12 @@ export class ChatView extends ItemView {
 				this.plugin.parser,
 				this.plugin.settings.apiKey,
 				this.plugin.settings.modelSlug,
-				(id) => { void this.refreshSoulSelector(soulSelectEl, id); },
-				this.plugin.settings.language,
+				(id) => { void this.refreshSoulSelector(id); },
+				lang,
 			).open();
 		});
 
-		void this.refreshSoulSelector(soulSelectEl, null);
+		void this.refreshSoulSelector(null);
 
 		this.statusEl = headerEl.createDiv({ cls: 'agent-chat-status' });
 
@@ -107,7 +108,6 @@ export class ChatView extends ItemView {
 		const footerEl = this.chatEl.createDiv({ cls: 'agent-chat-footer' });
 
 		const composerEl = footerEl.createDiv({ cls: 'agent-chat-composer' });
-		const lang = this.plugin.settings.language;
 		this.textareaEl = composerEl.createEl('textarea', {
 			cls: 'agent-chat-input',
 			attr: { placeholder: t('chat_input_placeholder', lang), rows: '3' },
@@ -143,21 +143,14 @@ export class ChatView extends ItemView {
 
 	// — Soul selector —
 
-	private async refreshSoulSelector(selectEl: HTMLSelectElement, selectId: string | null): Promise<void> {
+	private async refreshSoulSelector(selectId: string | null): Promise<void> {
 		const souls = await this.plugin.soulManager.listSouls();
 		this.soulsCache = souls;
-		selectEl.empty();
-		if (souls.length === 0) {
-			selectEl.createEl('option', { text: '✨ Agent', value: 'default' });
-			return;
-		}
-		for (const s of souls) {
-			selectEl.createEl('option', { text: `${s.emoji} ${s.name}`, value: s.id });
-		}
+		if (souls.length === 0) return;
+
 		const target = selectId ?? this.activeSoulId;
 		const exists = souls.some(s => s.id === target);
-		selectEl.value = exists ? target : (souls[0]?.id ?? 'default');
-		this.activeSoulId = selectEl.value;
+		this.activeSoulId = exists ? target : (souls[0]?.id ?? 'default');
 
 		const activeSoul = souls.find(s => s.id === this.activeSoulId);
 		if (activeSoul) {
@@ -165,6 +158,46 @@ export class ChatView extends ItemView {
 			this.headerNameEl.setText(activeSoul.name);
 			this.setMascotEmoji(activeSoul.emoji);
 		}
+	}
+
+	private toggleSoulDropdown(anchorEl: HTMLElement): void {
+		if (this.soulDropdownEl) {
+			this.soulDropdownEl.remove();
+			this.soulDropdownEl = null;
+			return;
+		}
+		if (this.soulsCache.length === 0) return;
+
+		const dropdown = document.body.createDiv({ cls: 'agent-soul-dropdown' });
+		this.soulDropdownEl = dropdown;
+
+		for (const soul of this.soulsCache) {
+			const item = dropdown.createDiv({
+				cls: `agent-soul-dropdown-item${soul.id === this.activeSoulId ? ' is-active' : ''}`,
+				text: `${soul.emoji} ${soul.name}`,
+			});
+			item.addEventListener('click', () => {
+				this.activeSoulId = soul.id;
+				this.soulDisplayName = soul.name;
+				this.headerNameEl.setText(soul.name);
+				this.setMascotEmoji(soul.emoji);
+				dropdown.remove();
+				this.soulDropdownEl = null;
+			});
+		}
+
+		const rect = anchorEl.getBoundingClientRect();
+		dropdown.style.top = `${rect.bottom + 4}px`;
+		dropdown.style.left = `${rect.left}px`;
+
+		const close = (e: MouseEvent) => {
+			if (!dropdown.contains(e.target as Node)) {
+				dropdown.remove();
+				this.soulDropdownEl = null;
+				document.removeEventListener('click', close);
+			}
+		};
+		setTimeout(() => document.addEventListener('click', close), 0);
 	}
 
 	// — Send flow —
@@ -218,7 +251,7 @@ export class ChatView extends ItemView {
 			this.transcript.push({ role: 'assistant', content: response });
 			this.appendMessage('agent', response);
 
-			await this.updateActiveMd(response);
+			await this.plugin.sessionManager.updateActiveMdFromTurn(response);
 			this.resetIdleTimer();
 
 			// Append cost estimate to status line once pricing resolves (usually cached)
@@ -277,42 +310,6 @@ export class ChatView extends ItemView {
 			this.loadingEl.remove();
 			this.loadingEl = null;
 		}
-	}
-
-	// — active.md update —
-
-	private async updateActiveMd(lastResponse: string): Promise<void> {
-		const path = '_agent/memory/active.md';
-		const content = await this.plugin.vaultManager.readFile(path);
-		if (!content) return;
-
-		const summary = this.extractSummary(lastResponse, 3);
-		const now = new Date().toISOString().slice(0, 16);
-
-		const { frontmatter, body } = this.plugin.parser.parse(content);
-		const updatedFm = { ...frontmatter, updated_at: now };
-		const updatedBody = this.plugin.parser.updateSection(body, 'Current focus', summary);
-
-		await this.plugin.vaultManager.writeFile(
-			path,
-			this.plugin.parser.serialize(updatedFm, updatedBody),
-		);
-	}
-
-	private extractSummary(text: string, maxSentences: number): string {
-		const trimmed = text.trim();
-		const sentenceEndRe = /[.!?]/g;
-		let match: RegExpExecArray | null;
-		let count = 0;
-		let endIdx = trimmed.length;
-		while ((match = sentenceEndRe.exec(trimmed)) !== null) {
-			count++;
-			if (count === maxSentences) {
-				endIdx = match.index + 1;
-				break;
-			}
-		}
-		return trimmed.slice(0, endIdx);
 	}
 
 	// — Save conversation —

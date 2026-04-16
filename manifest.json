@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-minimal-agent",
 	"name": "Minimal Agent",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.4.0",
 	"description": "A minimal AI agent with transparent, vault-based long-term memory.",
 	"author": "Rafafields",
