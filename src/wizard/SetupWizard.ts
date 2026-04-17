@@ -11,6 +11,7 @@ import { SoulForm, type SoulFormState } from '../ui/SoulForm';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
 import { SoulManager } from '../souls/SoulManager';
 import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
+import { wrapLink } from '../utils/links';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -457,7 +458,7 @@ export class SetupWizard extends Modal {
 	// — Soul generation —
 
 	private makeClient(): OpenRouterClient {
-		return new OpenRouterClient(this.apiKey, this.modelSlug || 'qwen/qwen3.5-27b');
+		return new OpenRouterClient(this.apiKey, this.modelSlug || 'anthropic/claude-sonnet-4.6');
 	}
 
 	private async generateSoul(): Promise<{ body: string; usage: LLMUsage }> {
@@ -600,24 +601,35 @@ export class SetupWizard extends Modal {
 
 			const soulId = SoulManager.nameToId(s.name || 'Agent');
 			this.plugin.settings.apiKey = this.apiKey;
-			this.plugin.settings.modelSlug = this.modelSlug || 'qwen/qwen3.5-27b';
+			this.plugin.settings.modelSlug = this.modelSlug || 'anthropic/claude-sonnet-4.6';
 			this.plugin.settings.defaultSoul = soulId;
 			await this.plugin.saveSettings();
 
 			await this.vaultManager.ensurePath('_agent/souls');
 			await this.vaultManager.ensurePath('_agent/memory/episodes');
-			await this.vaultManager.ensurePath('_agent/memory/items/_pending');
+			await this.vaultManager.ensurePath('_agent/memory/items');
 			await this.vaultManager.ensurePath('_system/traces');
+			await this.vaultManager.ensurePath('_system/memory_tiers');
+			await this.vaultManager.ensurePath('_system/memory_kinds');
+			await this.vaultManager.ensurePath('_system/states');
+			await this.vaultManager.ensurePath('_system/origins');
+			await this.vaultManager.ensurePath('_system/kinds');
+
+			// — Reference notes —
+			await this.createReferenceNotes();
+
+			// — .base files —
+			await this.createBaseFiles();
 
 			const soulFmLines = [
 				'---',
 				`name: "${s.name || 'Agent'}"`,
 				`emoji: ${s.emoji}`,
-				'kind: agent_soul',
-				'state: active',
+				`kind: "${wrapLink('agent_soul')}"`,
+				`state: "${wrapLink('active')}"`,
 				`created_at: ${date}`,
 				`updated_at: ${date}`,
-				'origin: hybrid',
+				`origin: "${wrapLink('hybrid')}"`,
 			];
 			if (s.soulModelSlug) soulFmLines.push(`model_slug: ${s.soulModelSlug}`);
 			if (soulPhrases.length > 0) {
@@ -628,11 +640,11 @@ export class SetupWizard extends Modal {
 
 			await this.vaultManager.writeFile('_agent/user.md', [
 				'---',
-				'kind: agent_user',
-				'state: active',
+				`kind: "${wrapLink('agent_user')}"`,
+				`state: "${wrapLink('active')}"`,
 				`created_at: ${date}`,
 				`updated_at: ${date}`,
-				'origin: hybrid',
+				`origin: "${wrapLink('hybrid')}"`,
 				'---',
 				'',
 				userBody,
@@ -679,6 +691,122 @@ export class SetupWizard extends Modal {
 			this.finishError = e instanceof Error ? e.message : String(e);
 			this.finishState = 'error';
 			this.render();
+		}
+	}
+
+	private async createReferenceNotes(): Promise<void> {
+		const notes: [string, string][] = [
+			['_system/memory_tiers/working.md', '# Working\n\nMemory held in `active.md` for the current session or short-term focus.'],
+			['_system/memory_tiers/semantic.md', '# Semantic\n\nLong-term memory items indexed by score for context assembly.'],
+			['_system/memory_kinds/decision.md', '# Decision\n\nA choice made with intent, with lasting implications.'],
+			['_system/memory_kinds/insight.md', '# Insight\n\nA pattern or realization extracted from experience.'],
+			['_system/memory_kinds/constraint.md', '# Constraint\n\nA hard limit or boundary that shapes what is possible.'],
+			['_system/memory_kinds/risk.md', '# Risk\n\nAn open threat or uncertainty worth tracking.'],
+			['_system/memory_kinds/summary.md', '# Summary\n\nA compressed account of events or context.'],
+			['_system/memory_kinds/pattern.md', '# Pattern\n\nA recurring behavior, structure, or tendency worth naming.'],
+			['_system/states/pending.md', '# Pending\n\nExtracted by the agent, awaiting review. Not yet used in context.'],
+			['_system/states/active.md', '# Active\n\nConfirmed and eligible for context assembly.'],
+			['_system/states/stale.md', '# Stale\n\nExpired. No longer included in context.'],
+			['_system/states/archived.md', '# Archived\n\nManually retired. Kept for reference.'],
+			['_system/states/confirmed.md', '# Confirmed\n\nEpisode or item accepted as part of the permanent record.'],
+			['_system/origins/agent.md', '# Agent\n\nCreated by the agent from session content.'],
+			['_system/origins/human.md', '# Human\n\nCreated directly by the user.'],
+			['_system/origins/hybrid.md', '# Hybrid\n\nCreated collaboratively between user and agent.'],
+			['_system/kinds/memory_item.md', '# Memory Item\n\nA discrete piece of long-term memory.'],
+			['_system/kinds/memory_episode.md', '# Memory Episode\n\nA session summary with transcript and extracted candidates.'],
+			['_system/kinds/agent_soul.md', '# Agent Soul\n\nPersonality and identity definition for an agent.'],
+		];
+
+		for (const [path, content] of notes) {
+			if (!this.vaultManager.fileExists(path)) {
+				await this.vaultManager.writeFile(path, content);
+			}
+		}
+	}
+
+	private async createBaseFiles(): Promise<void> {
+		const bases: [string, string][] = [
+			['_agent/memory/episodes/_episodes.base', [
+				'views:',
+				'  - type: table',
+				'    name: Tabla',
+				'    filters:',
+				'      and:',
+				'        - file.inFolder("_agent/memory/episodes")',
+				'        - file.ext != "base"',
+				'    order:',
+				'      - file.name',
+				'      - kind',
+				'      - state',
+				'      - origin',
+				'      - session_id',
+				'      - soul',
+				'      - token_cost',
+				'      - created_at',
+				'      - updated_at',
+			].join('\n')],
+			['_agent/memory/items/_memory-items.base', [
+				'views:',
+				'  - type: table',
+				'    name: Tabla',
+				'    filters:',
+				'      and:',
+				'        - file.inFolder("_agent/memory/items")',
+				'        - file.ext != "base"',
+				'    order:',
+				'      - file.name',
+				'      - kind',
+				'      - state',
+				'      - created_at',
+				'      - updated_at',
+				'      - origin',
+				'      - memory_tier',
+				'      - memory_kind',
+				'      - importance',
+				'      - confidence',
+				'      - tags',
+				'      - expires_at',
+				'      - proposed_tags',
+				'      - related_to',
+				'      - session_id',
+				'      - soul',
+			].join('\n')],
+			['_agent/souls/_souls.base', [
+				'views:',
+				'  - type: table',
+				'    name: Tabla',
+				'    filters:',
+				'      and:',
+				'        - file.inFolder("_agent/souls")',
+				'        - file.ext != "base"',
+				'    order:',
+				'      - file.name',
+				'      - emoji',
+				'      - name',
+				'      - kind',
+				'      - loading_phrases',
+				'      - origin',
+				'      - created_at',
+				'      - updated_at',
+			].join('\n')],
+			['_system/traces/_traces.base', [
+				'views:',
+				'  - type: table',
+				'    name: Tabla',
+				'    filters:',
+				'      and:',
+				'        - file.inFolder("_system/traces")',
+				'        - file.ext != "base"',
+				'    order:',
+				'      - file.name',
+				'      - file.ctime',
+			].join('\n')],
+		];
+
+		for (const [path, content] of bases) {
+			if (!this.vaultManager.fileExists(path)) {
+				await this.vaultManager.writeFile(path, content);
+			}
 		}
 	}
 }

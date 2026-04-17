@@ -22,7 +22,7 @@ export interface AgentSettings {
 export const DEFAULT_SETTINGS: AgentSettings = {
 	defaultSoul: 'default',
 	apiKey: '',
-	modelSlug: 'qwen/qwen3.5-27b',
+	modelSlug: 'anthropic/claude-sonnet-4.6',
 	language: detectDefaultLanguage(),
 	contextTokenBudget: 8000,
 	episodeDaysBack: 2,

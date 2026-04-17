@@ -162,19 +162,7 @@ export default class MinimalAgentPlugin extends Plugin {
 					return;
 				}
 
-				// Candidate confirmed: user moved file out of _pending/
-				if (!oldPath.includes('memory/items/_pending/')) return;
-
-				const cache = this.app.metadataCache.getFileCache(file);
-				const fm = cache?.frontmatter as Partial<MemoryItemFrontmatter> | undefined;
-				if (!fm) return;
-
-				this.memoryManager.confirmItem(file.path, fm as MemoryItemFrontmatter);
-
-				const proposedTags = fm.proposed_tags;
-				if (Array.isArray(proposedTags) && proposedTags.length > 0) {
-					void this.taxonomyManager.addToActive(proposedTags);
-				}
+				// No pending-folder logic needed: confirmation is state-based (handled in modify hook)
 			}),
 		);
 
@@ -193,8 +181,11 @@ export default class MinimalAgentPlugin extends Plugin {
 					return;
 				}
 
-				// Candidate discarded: user deleted file from _pending/
-				if (!file.path.includes('memory/items/_pending/')) return;
+				// Candidate discarded: user deleted a memory item
+				if (!file.path.includes('memory/items/') || file.path.endsWith('.base')) return;
+				const cachedFm = this.app.metadataCache.getCache(file.path)?.frontmatter;
+				const state = String(cachedFm?.['state'] ?? '');
+				if (!state.includes('pending')) return;
 				const ts = new Date().toISOString().slice(0, 16).replace(':', '-');
 				const tracePath = `_system/traces/${ts}-discard.md`;
 				void this.vaultManager.writeFile(tracePath, `Discarded: ${file.path}\n`);
@@ -214,10 +205,18 @@ export default class MinimalAgentPlugin extends Plugin {
 					return;
 				}
 
-				// Confirmed item edited: invalidate score cache
-				if (!file.path.includes('memory/items/')) return;
-				if (file.path.includes('_pending/')) return;
+				// Item edited: invalidate score cache + update taxonomy if newly confirmed
+				if (!file.path.includes('memory/items/') || file.path.endsWith('.base')) return;
 				this.memoryManager.reindex(file.path);
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter as Partial<MemoryItemFrontmatter> | undefined;
+				if (!fm) return;
+				const state = String(fm.state ?? '');
+				if (state.includes('pending')) return;
+				const proposedTags = fm.proposed_tags;
+				if (Array.isArray(proposedTags) && proposedTags.length > 0) {
+					void this.taxonomyManager.addToActive(proposedTags);
+				}
 			}),
 		);
 	}

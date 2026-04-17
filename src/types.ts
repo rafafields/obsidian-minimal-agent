@@ -7,7 +7,7 @@ export interface SoulMeta {
 	loading_phrases?: string[];
 }
 
-export type MemoryState = 'draft' | 'active' | 'stale' | 'archived';
+export type MemoryState = 'pending' | 'active' | 'stale' | 'archived';
 export type MemoryTier = 'working' | 'semantic';
 export type MemoryKind = 'decision' | 'insight' | 'constraint' | 'risk' | 'summary' | 'pattern';
 export type Importance = 'low' | 'medium' | 'high' | 'critical';

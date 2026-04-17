@@ -6,6 +6,7 @@ import { MemoryExtractor } from '../memory/MemoryExtractor';
 import type { ChatMessage, MemoryItemCandidate } from '../types';
 import { countTokens } from '../utils/tokens';
 import { t } from '../utils/language';
+import { wrapLink } from '../utils/links';
 
 export class SessionManager {
 	private extractor = new MemoryExtractor();
@@ -47,7 +48,7 @@ export class SessionManager {
 		// Write episode
 		await this.writeEpisode(episodePath, sessionId, datetime, soulId, soulName, transcript, candidates);
 
-		// Write memory candidates to _pending/
+		// Write memory candidates to items/
 		for (const candidate of candidates) {
 			await this.writePendingItem(candidate, sessionId, datetime, soulId);
 		}
@@ -118,13 +119,13 @@ export class SessionManager {
 		].join('\n');
 
 		const fm = {
-			kind: 'memory_episode',
-			state: 'confirmed',
+			kind: wrapLink('memory_episode'),
+			state: wrapLink('confirmed'),
 			created_at: datetime,
 			updated_at: datetime,
-			origin: `[[${soulName}]]`,
+			origin: wrapLink(soulName),
 			session_id: sessionId,
-			soul: soulId,
+			soul: wrapLink(soulId),
 			token_cost: tokenCost,
 		};
 		await this.vaultManager.writeFile(episodePath, this.parser.serialize(fm, sessionBlock));
@@ -139,16 +140,16 @@ export class SessionManager {
 		soulId: string,
 	): Promise<void> {
 		const filename = this.sanitizeFilename(candidate.title);
-		const path = `_agent/memory/items/_pending/${filename}.md`;
+		const path = `_agent/memory/items/${filename}.md`;
 
 		const fm: Record<string, unknown> = {
-			kind: 'memory_item',
-			state: 'draft',
+			kind: wrapLink('memory_item'),
+			state: wrapLink('pending'),
 			created_at: datetime,
 			updated_at: datetime,
-			origin: 'agent',
-			memory_tier: candidate.memory_tier,
-			memory_kind: candidate.memory_kind,
+			origin: wrapLink('agent'),
+			memory_tier: wrapLink(candidate.memory_tier),
+			memory_kind: wrapLink(candidate.memory_kind),
 			importance: candidate.importance,
 			confidence: candidate.confidence,
 			tags: candidate.tags,
@@ -156,7 +157,7 @@ export class SessionManager {
 			related_to: [],
 			expires_at: candidate.expires_at,
 			session_id: sessionId,
-			soul: soulId,
+			soul: wrapLink(soulId),
 		};
 
 		const body = [
@@ -262,7 +263,7 @@ export class SessionManager {
 
 		const highestImportance = candidates.find(c => c.importance === 'critical') ?? candidates[0];
 		const nextStep = highestImportance
-			? `Review and confirm: _pending/${this.sanitizeFilename(highestImportance.title)}.md`
+			? `Review: [[memory/items/${this.sanitizeFilename(highestImportance.title)}]]`
 			: '';
 
 		let updatedBody = this.parser.updateSection(body, 'Recent decisions', decisionLines);

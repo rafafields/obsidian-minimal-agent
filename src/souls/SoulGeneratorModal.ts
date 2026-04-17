@@ -8,6 +8,7 @@ import { LoadingScreen } from '../ui/LoadingScreen';
 import { SoulForm, type SoulFormState } from '../ui/SoulForm';
 import { SoulManager } from './SoulManager';
 import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
+import { wrapLink } from '../utils/links';
 import { Setting } from 'obsidian';
 
 type GenState = 'form' | 'generating' | 'done' | 'error';
@@ -157,7 +158,7 @@ export class SoulGeneratorModal extends Modal {
 		let loadingPhrases: string[] = [];
 		try {
 			if (hasContent) {
-				const client = new OpenRouterClient(this.apiKey, this.modelSlug || 'qwen/qwen3.5-27b');
+				const client = new OpenRouterClient(this.apiKey, this.modelSlug || 'anthropic/claude-sonnet-4.6');
 				const userMessage = [
 					`Soul name: ${s.name}`,
 					'',
@@ -193,11 +194,11 @@ export class SoulGeneratorModal extends Modal {
 			const fm: Record<string, unknown> = {
 				name: s.name,
 				emoji: s.emoji,
-				kind: 'agent_soul',
-				state: 'active',
+				kind: wrapLink('agent_soul'),
+				state: wrapLink('active'),
 				created_at: date,
 				updated_at: date,
-				origin: 'hybrid',
+				origin: wrapLink('hybrid'),
 			};
 			if (s.soulModelSlug) fm['model_slug'] = s.soulModelSlug;
 			if (loadingPhrases.length > 0) fm['loading_phrases'] = loadingPhrases;

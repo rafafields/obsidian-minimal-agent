@@ -11,36 +11,6 @@ export interface CuratedModel {
 
 export const CURATED_MODELS: CuratedModel[] = [
 	{
-		slug: 'google/gemma-4-31b-it',
-		displayName: 'Gemma 4 31B',
-		provider: 'Google',
-		inputPricePerM: 0.14,
-		outputPricePerM: 0.40,
-		tier: 'cheap',
-		zdr: true,
-		description: 'Ideal para chats cotidianos, asistentes de productividad, compañeros virtuales sencillos; buena personalidad con instrucciones claras.',
-	},
-	{
-		slug: 'deepseek/deepseek-v3.2',
-		displayName: 'DeepSeek V3.2',
-		provider: 'DeepSeek',
-		inputPricePerM: 0.26,
-		outputPricePerM: 0.38,
-		tier: 'cheap',
-		zdr: true,
-		description: 'Ideal para agentes técnicos o de ayuda con tareas concretas (código, datos, análisis); menos expresivo emocionalmente pero muy preciso.',
-	},
-	{
-		slug: 'minimax/minimax-m2.7',
-		displayName: 'MiniMax M2.7',
-		provider: 'MiniMax',
-		inputPricePerM: 0.30,
-		outputPricePerM: 1.20,
-		tier: 'cheap',
-		zdr: true,
-		description: 'Ideal para agentes que gestionan conversaciones largas o con mucho contexto acumulado; aguanta bien memorias extensas.',
-	},
-	{
 		slug: 'openai/gpt-5.4-nano',
 		displayName: 'GPT-5.4 Nano',
 		provider: 'OpenAI',
@@ -69,16 +39,6 @@ export const CURATED_MODELS: CuratedModel[] = [
 		tier: 'expensive',
 		zdr: true,
 		description: 'Ideal para agentes complejos con personalidad rica, razonamiento empático, situaciones delicadas o profesionales; la mejor experiencia conversacional del rango medio-alto.',
-	},
-	{
-		slug: 'anthropic/claude-opus-4.6',
-		displayName: 'Claude Opus 4.6',
-		provider: 'Anthropic',
-		inputPricePerM: 5.00,
-		outputPricePerM: 25.00,
-		tier: 'expensive',
-		zdr: true,
-		description: 'El agente más sofisticado posible; recomendado solo si el caso de uso lo justifica (coaching, toma de decisiones importante, contextos premium).',
 	},
 ];
 

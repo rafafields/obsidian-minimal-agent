@@ -4,11 +4,12 @@ import type { VaultManager } from '../vault/VaultManager';
 import type { FrontmatterParser } from '../vault/FrontmatterParser';
 import type { MemoryManager } from '../memory/MemoryManager';
 import { countTokens } from '../utils/tokens';
+import { unwrapLink } from '../utils/links';
 
 const EPISODIC_BUDGET = 400;
 
 function isMemoryItem(fm: unknown): fm is MemoryItemFrontmatter {
-	return typeof fm === 'object' && fm !== null && (fm as Record<string, unknown>)['kind'] === 'memory_item';
+	return typeof fm === 'object' && fm !== null && unwrapLink(String((fm as Record<string, unknown>)['kind'] ?? '')) === 'memory_item';
 }
 
 export class ContextAssembler {
@@ -63,7 +64,9 @@ export class ContextAssembler {
 
 		// — Layer 2: Episodic (up to EPISODIC_BUDGET tokens) —
 		let episodicTokens = 0;
-		const allEpisodes = this.vaultManager.listFiles('_agent/memory/episodes').sort().reverse();
+		const allEpisodes = this.vaultManager.listFiles('_agent/memory/episodes')
+			.filter(p => !p.endsWith('.base'))
+			.sort().reverse();
 
 		for (let i = 0; i < options.episodeDaysBack; i++) {
 			if (episodicTokens >= EPISODIC_BUDGET) break;
@@ -96,7 +99,7 @@ export class ContextAssembler {
 			type Candidate = { filePath: string; content: string; tokens: number; score: number };
 			const candidates: Candidate[] = [];
 
-			for (const filePath of this.vaultManager.listFiles('_agent/memory/items')) {
+			for (const filePath of this.vaultManager.listFiles('_agent/memory/items').filter(p => !p.endsWith('.base'))) {
 				const content = await this.vaultManager.readFile(filePath);
 				if (!content) continue;
 

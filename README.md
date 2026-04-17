@@ -7,10 +7,12 @@ All agent state — personality, configuration, memory — lives as human-readab
 ## Features
 
 - **Chat sidebar** — talk to the agent from a persistent panel in the right sidebar
+- **Multiple souls** — create distinct agent personalities via the Soul Generator; each soul can pin its own model
 - **Long-term memory** — the agent extracts and remembers relevant information across sessions
 - **Full transparency** — every memory item, episode summary, and API trace is a readable file in `_agent/`
 - **Human review** — memory candidates go to `_pending/` for your approval before being confirmed
 - **Configurable context** — token budget, importance threshold, and episode history are all adjustable
+- **Multilingual** — response language is configurable per-installation
 
 ## Requirements
 
@@ -30,28 +32,138 @@ The plugin creates and manages two top-level folders:
 
 ```
 _agent/
-  soul.md              # Agent personality and values (edit freely)
-  user.md              # Your profile — work style, preferences
-  taxonomy.md          # Authorized tag vocabulary
+  souls/
+    default.md           # Default soul (created by setup wizard)
+    *.md                 # Additional souls created with Soul Generator
+  user.md                # Your profile — work style, preferences
+  taxonomy.md            # Authorized tag vocabulary
   memory/
-    active.md          # Current working memory (updated each session)
-    episodes/          # Session summaries — one .md file per day
-    items/             # Confirmed memory items
-      _pending/        # Candidates awaiting your review
+    active.md            # Current working memory (updated each session)
+    episodes/            # Session summaries — one .md file per session
+    items/               # Confirmed memory items
+      _pending/          # Candidates awaiting your review
 _system/
-  traces/              # Raw API call traces (auto-deleted per retention setting)
+  traces/                # Raw API call traces (auto-deleted per retention setting)
 ```
 
 ## Memory workflow
 
 After you click **Finalize and memorize** (or the idle timer fires), the agent:
 
-1. Writes a session summary to `_agent/memory/episodes/YYYY-MM-DD.md`
-2. Extracts 0–5 memory candidates and writes them to `_agent/memory/items/_pending/`
+1. Writes a session summary to `_agent/memory/episodes/YYYY-MM-DD-HH-MM.md`
+2. Sends the transcript to a second LLM call that extracts 0–5 memory candidates
+3. Writes candidates to `_agent/memory/items/_pending/`
 
 To review candidates:
-- **Move** a file from `_pending/` to `_agent/memory/items/` → confirmed, will be used in future sessions
+- **Move** a file from `_pending/` to `_agent/memory/items/` → confirmed, used in future sessions
 - **Delete** a file → discarded, logged in `_system/traces/`
+
+The vault hooks watch these actions in real time — no manual steps beyond moving or deleting the file.
+
+## LLM services
+
+All model calls go through **OpenRouter** using two service classes.
+
+### OpenRouterClient
+
+`src/llm/OpenRouterClient.ts` is the low-level transport. It handles one thing: turning a list of messages into a response, with retry logic for rate limits.
+
+```
+ChatView / SessionManager
+        │
+        │  messages[]
+        ▼
+┌─────────────────────────────────────────────────────┐
+│               OpenRouterClient.chat()               │
+│                                                     │
+│  POST /chat/completions                             │
+│  ├─ model: slug (from soul or global setting)       │
+│  ├─ temperature: 0.7 (default)                      │
+│  └─ Authorization: Bearer <apiKey>                  │
+│                                                     │
+│  On 429 → exponential backoff, up to 3 retries      │
+│  On error → throws LLMError (caller shows Notice)   │
+└─────────────────────────────────────────────────────┘
+        │
+        │  { content, usage: { promptTokens, completionTokens } }
+        ▼
+   caller receives LLMResponse
+```
+
+There is also a static helper `OpenRouterClient.fetchPricing(slug, apiKey)` that hits `/models` with a 5-second timeout and returns `{ promptPerToken, completionPerToken }` — used by the settings tab and wizard to display live price estimates.
+
+### Context assembly → chat call flow
+
+Before every user message, `ContextAssembler.assemble()` builds the system prompt in three layers within a fixed token budget (default: 8 000 tokens):
+
+```
+  Token budget: 8 000
+  ┌───────────────────────────────────────────────────┐
+  │  Layer 1 · Bootstrap   (~700 tok, always present) │
+  │    soul.md · user.md · taxonomy.md · active.md    │
+  ├───────────────────────────────────────────────────┤
+  │  Layer 2 · Episodic            (~400 tok budget)  │
+  │    today's episode · yesterday's episode          │
+  ├───────────────────────────────────────────────────┤
+  │  Layer 3 · Semantic         (remaining budget)    │
+  │    confirmed memory_item files, ranked by score   │
+  │                                                   │
+  │    score = importance_weight                      │
+  │           + tier_bonus                            │
+  │           - staleness_penalty                     │
+  │                                                   │
+  │    items are dropped (not truncated) once budget  │
+  │    is exhausted                                   │
+  └───────────────────────────────────────────────────┘
+         │
+         │  assembled system prompt
+         ▼
+  OpenRouterClient.chat([system, ...transcript, userMsg])
+```
+
+### Memory extraction call flow
+
+After `finalizeSession()` is triggered, `MemoryExtractor.extract()` sends a **separate** LLM call with the session transcript and a structured extraction prompt. The model returns a JSON array of 0–5 candidates:
+
+```
+  transcript (ChatMessage[])
+        │
+        │  if > 6 000 tokens → compress to summary first
+        ▼
+  MemoryExtractor.extract()
+        │
+        │  POST /chat/completions
+        │  system: extraction prompt + taxonomy
+        │  user:   transcript text
+        ▼
+  JSON response → parse candidates[]
+        │
+        ├─► write each candidate to _pending/ as .md (frontmatter + body)
+        ├─► write episode summary to episodes/
+        └─► write raw trace to _system/traces/
+```
+
+The extraction call uses the same `modelSlug` as the chat session. Candidates are **never auto-confirmed** — they sit in `_pending/` until you act on them.
+
+## Context scoring formula
+
+Memory items stored in `_agent/memory/items/` are ranked each session. Items that don't fit within the remaining token budget are silently dropped (never truncated mid-content).
+
+| Component          | Value                                     |
+|--------------------|-------------------------------------------|
+| `importance_weight`| critical=100, high=75, medium=40, low=10  |
+| `tier_bonus`       | semantic=20, working=5                    |
+| `staleness_penalty`| `min(30, days_since_update × 0.5)`        |
+
+## Available models
+
+The plugin ships with a curated list of models pre-configured with pricing and descriptions. The default is **Claude Sonnet 4.6**. Any OpenRouter model slug can be entered manually via the custom model option.
+
+| Model              | Provider  | Tier      |
+|--------------------|-----------|-----------|
+| Claude Sonnet 4.6  | Anthropic | Expensive |
+| GPT-5.4 Nano       | OpenAI    | Cheap     |
+| Qwen 3.5 27B       | Qwen      | Cheap     |
 
 ## Architecture
 

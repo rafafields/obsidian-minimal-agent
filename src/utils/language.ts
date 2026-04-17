@@ -183,7 +183,7 @@ const EN = {
 
 	settings_memory_section:      'Memory',
 	settings_require_confirm_name:'Require confirmation before writing',
-	settings_require_confirm_desc:'When enabled, memory candidates are written to _pending/ for manual review before being confirmed.',
+	settings_require_confirm_desc:'When enabled, memory candidates are written with state "pending" for manual review before being confirmed.',
 	settings_auto_archive_name:   'Auto-archive expired items',
 	settings_auto_archive_desc:   'Automatically mark memory items as stale when their expiry date passes.',
 	settings_trace_retention_name:'Trace retention (days)',
@@ -202,8 +202,8 @@ const EN = {
 	// SessionManager notices
 	session_extraction_failed: 'Memory extraction failed — session saved without candidates.',
 	session_saved_zero:        'Session saved. No memory candidates extracted.',
-	session_saved_one:         'Session saved. 1 memory candidate written to _pending/.',
-	session_saved_many:        'Session saved. {n} memory candidates written to _pending/.',
+	session_saved_one:         'Session saved. 1 memory candidate pending review.',
+	session_saved_many:        'Session saved. {n} memory candidates pending review.',
 } as const;
 
 type TranslationKey = keyof typeof EN;
@@ -226,11 +226,11 @@ const ES: Partial<Record<TranslationKey, string>> = {
 	model:                    'Modelo',
 	custom_model_slug:        'Slug de modelo personalizado',
 	soul_emoji:               'Emoji',
-	soul_emoji_desc:          'Emoji único mostrado en el selector de almas.',
-	soul_model_desc:          'Modelo a usar para esta alma. Déjalo en blanco para usar el modelo global de la configuración.',
+	soul_emoji_desc:          'Emoji único mostrado en el selector de souls.',
+	soul_model_desc:          'Modelo a usar para esta soul. Déjalo en blanco para usar el modelo global de la configuración.',
 	soul_model_global:        '— Predeterminado global —',
 	core_purpose:             'Propósito central',
-	core_purpose_desc:        '¿Para qué sirve fundamentalmente esta alma? (2–3 frases)',
+	core_purpose_desc:        '¿Para qué sirve fundamentalmente esta soul? (2–3 frases)',
 	core_purpose_placeholder: 'Un compañero de pensamiento para mi trabajo diario.',
 	core_values:              'Valores fundamentales',
 	core_values_desc:         '¿Qué principios deben guiarla?',
@@ -249,19 +249,19 @@ const ES: Partial<Record<TranslationKey, string>> = {
 	chat_save:                'Guardar conversación',
 	chat_saved_notice:        'Conversación guardada en {path}',
 	chat_agent_error:         'Error del agente: {msg}',
-	chat_create_soul_title:   'Crear nueva alma',
+	chat_create_soul_title:   'Crear nueva soul',
 	chat_switch_soul_title:   'Cambiar soul',
 
 	// SetupWizard
 	wizard_step_of:             'Paso {step} de {total}',
 	wizard_welcome_title:       'Bienvenido a Minimal Agent',
-	wizard_welcome_desc1:       'Un agente de IA minimal que vive completamente dentro de tu vault. Su personalidad, memoria y todo lo que sabe sobre ti se almacena como archivos Markdown que puedes leer y editar en cualquier momento.',
+	wizard_welcome_desc1:       'Un agente de IA minimal que vive completamente dentro de tu vault. Su personalidad, memoria y todo lo que sabe sobre ti se soulcena como archivos Markdown que puedes leer y editar en cualquier momento.',
 	wizard_welcome_desc2:       'Este asistente te ayudará a configurar la conexión API, definir la identidad de tu agente y preparar la estructura del vault. Solo lleva un minuto.',
-	wizard_welcome_language_desc: 'Idioma usado para los documentos de alma y usuario generados.',
+	wizard_welcome_language_desc: 'Idioma usado para los documentos de soul y usuario generados.',
 	wizard_get_started:         'Comenzar',
 
 	wizard_api_title:           'Conectar a OpenRouter',
-	wizard_api_desc:            'Minimal Agent usa OpenRouter para acceder a modelos de lenguaje. Tu clave API se almacena solo en la configuración del plugin de Obsidian, nunca se escribe en el vault.',
+	wizard_api_desc:            'Minimal Agent usa OpenRouter para acceder a modelos de lenguaje. Tu clave API se soulcena solo en la configuración del plugin de Obsidian, nunca se escribe en el vault.',
 	wizard_api_key_name:        'Clave API de OpenRouter',
 	wizard_api_key_desc:        'Tu clave de openrouter.ai.',
 	wizard_model_desc:          'Modelos preseleccionados. Los marcados con {zdr} cumplen con la política de Retención Cero de Datos de OpenRouter.',
@@ -298,7 +298,7 @@ const ES: Partial<Record<TranslationKey, string>> = {
 
 	wizard_loading_title:       'Configurando tu agente…',
 	wizard_loading_user:        'Generando user.md…',
-	wizard_loading_soul:        'Generando alma…',
+	wizard_loading_soul:        'Generando soul…',
 	wizard_loading_files:       'Escribiendo archivos del vault…',
 
 	wizard_done_title:          '¡Todo listo!',
@@ -308,30 +308,30 @@ const ES: Partial<Record<TranslationKey, string>> = {
 	wizard_open_chat:           'Abrir chat',
 	wizard_error_title:         'Configuración fallida',
 	wizard_user_gen_failed:     'La generación del documento de usuario falló: {msg}. Usando el formulario como alternativa.',
-	wizard_soul_gen_failed:     'La generación del alma falló: {msg}. Usando alma predeterminada.',
+	wizard_soul_gen_failed:     'La generación del soul falló: {msg}. Usando soul predeterminada.',
 
 	// SoulGeneratorModal
-	soul_gen_title:            'Crear una nueva alma',
-	soul_gen_desc:             'Define la identidad de esta alma. Estos campos generan un archivo de alma en _agent/souls/. Puedes editarlo directamente en Obsidian en cualquier momento.',
-	soul_gen_name_name:        'Nombre del alma',
-	soul_gen_name_desc:        'Nombre de visualización para esta alma (p.ej. "Sofía").',
+	soul_gen_title:            'Crear una nueva soul',
+	soul_gen_desc:             'Define la identidad de esta soul. Estos campos generan un archivo de soul en _agent/souls/. Puedes editarlo directamente en Obsidian en cualquier momento.',
+	soul_gen_name_name:        'Nombre del soul',
+	soul_gen_name_desc:        'Nombre de visualización para esta soul (p.ej. "Sofía").',
 	soul_gen_name_ph:          'Mi Agente',
-	soul_gen_language_desc:    'Idioma para el documento de alma generado.',
-	soul_gen_name_required:    'El nombre del alma es obligatorio.',
-	soul_gen_generating_title: 'Generando alma…',
-	soul_gen_generating_soul:  'Generando documento de alma…',
+	soul_gen_language_desc:    'Idioma para el documento de soul generado.',
+	soul_gen_name_required:    'El nombre del soul es obligatorio.',
+	soul_gen_generating_title: 'Generando soul…',
+	soul_gen_generating_soul:  'Generando documento de soul…',
 	soul_gen_generating_file:  'Escribiendo archivo…',
-	soul_gen_done_title:       '¡Alma creada!',
+	soul_gen_done_title:       '¡soul creada!',
 	soul_gen_done_desc:        '"{name}" ha sido guardada en _agent/souls/{id}.md.',
 	soul_gen_error_title:      'Generación fallida',
 
 	// Settings
-	settings_souls_section:       'Almas',
-	settings_default_soul_name:   'Alma predeterminada',
-	settings_default_soul_desc:   'Alma cargada al inicio de cada nueva conversación.',
-	settings_create_soul_btn:     'Crear nueva alma',
+	settings_souls_section:       'souls',
+	settings_default_soul_name:   'soul predeterminada',
+	settings_default_soul_desc:   'soul cargada al inicio de cada nueva conversación.',
+	settings_create_soul_btn:     'Crear nueva soul',
 	settings_souls_loading:       'Cargando… ({id})',
-	settings_souls_none:          'No se encontraron almas — crea una',
+	settings_souls_none:          'No se encontraron souls — crea una',
 
 	settings_api_section:         'API',
 	settings_api_key_name:        'Clave API',
@@ -363,7 +363,7 @@ const ES: Partial<Record<TranslationKey, string>> = {
 
 	settings_memory_section:      'Memoria',
 	settings_require_confirm_name:'Requerir confirmación antes de escribir',
-	settings_require_confirm_desc:'Cuando está activado, los candidatos de memoria se escriben en _pending/ para revisión manual antes de ser confirmados.',
+	settings_require_confirm_desc:'Cuando está activado, los candidatos de memoria se escriben con estado "pending" para revisión manual antes de ser confirmados.',
 	settings_auto_archive_name:   'Archivar automáticamente elementos caducados',
 	settings_auto_archive_desc:   'Marca automáticamente los elementos de memoria como obsoletos cuando pasa su fecha de caducidad.',
 	settings_trace_retention_name:'Retención de trazas (días)',
@@ -376,14 +376,14 @@ const ES: Partial<Record<TranslationKey, string>> = {
 	// OpenRouter links
 	openrouter_no_account:  '¿No tienes cuenta?',
 	openrouter_signup_link: 'Créala en openrouter.ai →',
-	zdr_desc:               'Retención cero de datos: los prompts no se almacenan ni se usan para entrenamiento.',
+	zdr_desc:               'Retención cero de datos: los prompts no se soulcenan ni se usan para entrenamiento.',
 	zdr_learn_more:         'Más info',
 
 	// SessionManager notices
 	session_extraction_failed: 'La extracción de memoria falló — sesión guardada sin candidatos.',
 	session_saved_zero:        'Sesión guardada. No se extrajeron candidatos de memoria.',
-	session_saved_one:         'Sesión guardada. 1 candidato de memoria escrito en _pending/.',
-	session_saved_many:        'Sesión guardada. {n} candidatos de memoria escritos en _pending/.',
+	session_saved_one:         'Sesión guardada. 1 candidato de memoria pendiente de revisión.',
+	session_saved_many:        'Sesión guardada. {n} candidatos de memoria pendientes de revisión.',
 };
 
 const TRANSLATIONS: Record<string, Partial<Record<TranslationKey, string>>> = {
