@@ -35,15 +35,19 @@ _agent/
   souls/
     default.md           # Default soul (created by setup wizard)
     *.md                 # Additional souls created with Soul Generator
+    _souls.base          # Obsidian Bases view for souls
   user.md                # Your profile — work style, preferences
   taxonomy.md            # Authorized tag vocabulary
   memory/
     active.md            # Current working memory (updated each session)
     episodes/            # Session summaries — one .md file per session
+      _episodes.base     # Obsidian Bases view for episodes
     items/               # Confirmed memory items
       _pending/          # Candidates awaiting your review
+      _memory-items.base # Obsidian Bases view for memory items
 _system/
   traces/                # Raw API call traces (auto-deleted per retention setting)
+    _traces.base         # Obsidian Bases view for traces
 ```
 
 ## Memory workflow
@@ -100,7 +104,7 @@ Before every user message, `ContextAssembler.assemble()` builds the system promp
   Token budget: 8 000
   ┌───────────────────────────────────────────────────┐
   │  Layer 1 · Bootstrap   (~700 tok, always present) │
-  │    soul.md · user.md · taxonomy.md · active.md    │
+  │    souls/{id}.md · user.md · taxonomy.md · active.md │
   ├───────────────────────────────────────────────────┤
   │  Layer 2 · Episodic            (~400 tok budget)  │
   │    today's episode · yesterday's episode          │
@@ -161,9 +165,9 @@ The plugin ships with a curated list of models pre-configured with pricing and d
 
 | Model              | Provider  | Tier      |
 |--------------------|-----------|-----------|
-| Claude Sonnet 4.6  | Anthropic | Expensive |
 | GPT-5.4 Nano       | OpenAI    | Cheap     |
 | Qwen 3.5 27B       | Qwen      | Cheap     |
+| Claude Sonnet 4.6  | Anthropic | Expensive |
 
 ## Architecture
 

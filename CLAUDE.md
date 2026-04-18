@@ -141,7 +141,16 @@ Implement `ContextAssembler.assemble()` with the three layers and token budget (
 - Update `manifest.json` with final plugin `id`, name, description, `minAppVersion`.
 - Update `README.md`.
 
-### Cross-cutting rules
+### After each implementation phase
+
+Before reporting a phase as complete, update `README.md` to reflect any changes to:
+- Vault structure (new files, folders, or file types created by the plugin)
+- Features list
+- Available models or their order
+- Context assembly layers
+- Memory workflow steps
+
+## Cross-cutting rules
 - `VaultManager` is a singleton instantiated on `MinimalAgentPlugin`, injected via constructor into all managers. No module calls `this.app.vault` directly.
 - `FrontmatterParser` is pure (no I/O) — takes and returns strings only.
 - `OpenRouterClient` is reconstructed whenever `apiKey` or `modelSlug` changes in settings.
