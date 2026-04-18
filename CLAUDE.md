@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An Obsidian community plugin implementing a minimal AI agent with long-term memory. The agent's entire state — personality, configuration, memory — lives as human-readable/editable `.md` files in the vault under `_agent/`. The core design principle is **total transparency**: no opaque internal state.
 
-The full technical spec is in `obsidian-agent-core-spec.md`.
+The full technical spec is in `docs/spec.md`.
 
 ## Commands
 

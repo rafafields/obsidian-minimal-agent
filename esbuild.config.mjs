@@ -32,7 +32,7 @@ const context = await esbuild.context({
 		"@lezer/highlight",
 		"@lezer/lr",
 		...builtinModules],
-	loader: { '.png': 'dataurl' },
+	loader: { '.png': 'dataurl', '.webp': 'dataurl' },
 	format: "cjs",
 	target: "es2018",
 	logLevel: "info",
