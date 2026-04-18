@@ -10,8 +10,8 @@ import { LoadingScreen } from '../ui/LoadingScreen';
 import { SoulForm, type SoulFormState } from '../ui/SoulForm';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
 import { SoulManager } from '../souls/SoulManager';
-import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
-import { wrapLink } from '../utils/links';
+import { LANGUAGES, detectDefaultLanguage, t } from '../i18n';
+import { initVault } from './WizardVaultInit';
 
 const SUGGESTED_TAGS = [
 	'#topic/work',
@@ -25,7 +25,6 @@ const SUGGESTED_TAGS = [
 ];
 
 const TOTAL_STEPS = 5;
-
 
 type FinishState = 'loading' | 'done' | 'error';
 
@@ -132,11 +131,9 @@ export class SetupWizard extends Modal {
 		const { contentEl } = this;
 		const L = this.language;
 
-		// ── 1. API title + description ────────────────────────────
 		contentEl.createEl('h2', { text: t('wizard_api_title', L) });
 		contentEl.createEl('p', { text: t('wizard_api_desc', L), cls: 'agent-wizard-desc' });
 
-		// ── 2. API key input (full-width, stacked) ────────────────
 		const apiFieldEl = contentEl.createDiv({ cls: 'agent-wizard-field' });
 		apiFieldEl.createEl('label', { text: t('wizard_api_key_name', L), cls: 'agent-wizard-field__label' });
 		const apiInput = apiFieldEl.createEl('input', {
@@ -146,7 +143,6 @@ export class SetupWizard extends Modal {
 		apiInput.value = this.apiKey;
 		apiInput.addEventListener('input', () => { this.apiKey = apiInput.value.trim(); });
 
-		// ── 3. OpenRouter signup link ─────────────────────────────
 		const signupEl = contentEl.createDiv({ cls: 'agent-wizard-link-hint' });
 		signupEl.createSpan({ text: t('openrouter_no_account', L) + ' ' });
 		const signupLink = signupEl.createEl('a', { text: t('openrouter_signup_link', L) });
@@ -155,13 +151,9 @@ export class SetupWizard extends Modal {
 			window.open('https://openrouter.ai/', '_blank');
 		});
 
-		// ── 4. Separator ──────────────────────────────────────────
 		contentEl.createEl('hr', { cls: 'agent-wizard-separator' });
-
-		// ── 5. Model title ────────────────────────────────────────
 		contentEl.createEl('h3', { text: t('model', L), cls: 'agent-wizard-section-title' });
 
-		// ── 6. Model description with inline ZDR link ─────────────
 		const modelDescEl = contentEl.createDiv({ cls: 'agent-wizard-desc' });
 		const [descBefore, descAfter] = t('wizard_model_desc', L).split('{zdr}');
 		modelDescEl.createSpan({ text: descBefore ?? '' });
@@ -172,7 +164,6 @@ export class SetupWizard extends Modal {
 		});
 		modelDescEl.createSpan({ text: descAfter ?? '' });
 
-		// ── 7. Model selector (full-width) ────────────────────────
 		const isCustomSlug = !findCuratedModel(this.modelSlug);
 		const modelFieldEl = contentEl.createDiv({ cls: 'agent-wizard-field' });
 		const modelSelect = modelFieldEl.createEl('select', { cls: 'agent-wizard-field__select dropdown' });
@@ -182,7 +173,6 @@ export class SetupWizard extends Modal {
 		modelSelect.createEl('option', { text: 'Custom…', value: CUSTOM_MODEL_OPTION });
 		modelSelect.value = isCustomSlug ? CUSTOM_MODEL_OPTION : this.modelSlug;
 
-		// Custom slug input (shown only when Custom… is selected)
 		const customFieldEl = contentEl.createDiv({ cls: 'agent-wizard-field' });
 		customFieldEl.style.display = isCustomSlug ? '' : 'none';
 		customFieldEl.createEl('label', { text: t('custom_model_slug', L), cls: 'agent-wizard-field__label' });
@@ -193,7 +183,6 @@ export class SetupWizard extends Modal {
 		customInput.value = isCustomSlug ? this.modelSlug : '';
 		customInput.addEventListener('input', () => { this.modelSlug = customInput.value.trim(); });
 
-		// ── 8. Model detail card ──────────────────────────────────
 		const modelCardEl = contentEl.createDiv({ cls: 'agent-wizard-model-card' });
 		modelCardEl.style.display = isCustomSlug ? 'none' : '';
 
@@ -202,15 +191,11 @@ export class SetupWizard extends Modal {
 			const model = findCuratedModel(slug);
 			if (!model) { modelCardEl.style.display = 'none'; return; }
 			modelCardEl.style.display = '';
-
 			if (model.zdr) {
 				modelCardEl.createSpan({ text: 'ZDR', cls: 'agent-wizard-model-card__zdr' });
 			}
 			const headerEl = modelCardEl.createDiv({ cls: 'agent-wizard-model-card__header' });
-			headerEl.createSpan({
-				text: `${model.displayName} · ${model.provider}`,
-				cls: 'agent-wizard-model-card__name',
-			});
+			headerEl.createSpan({ text: `${model.displayName} · ${model.provider}`, cls: 'agent-wizard-model-card__name' });
 			modelCardEl.createDiv({
 				text: `Input: $${model.inputPricePerM.toFixed(2)} / 1M · Output: $${model.outputPricePerM.toFixed(2)} / 1M`,
 				cls: 'agent-wizard-model-card__price',
@@ -258,9 +243,7 @@ export class SetupWizard extends Modal {
 			.setName(t('wizard_work_style_name', L))
 			.setDesc(t('wizard_work_style_desc', L))
 			.addTextArea(ta => {
-				ta.setValue(this.workStyle)
-					.setPlaceholder(t('wizard_work_style_ph', L))
-					.onChange(v => { this.workStyle = v; });
+				ta.setValue(this.workStyle).setPlaceholder(t('wizard_work_style_ph', L)).onChange(v => { this.workStyle = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -268,9 +251,7 @@ export class SetupWizard extends Modal {
 			.setName(t('wizard_comm_prefs_name', L))
 			.setDesc(t('wizard_comm_prefs_desc', L))
 			.addTextArea(ta => {
-				ta.setValue(this.commPreferences)
-					.setPlaceholder(t('wizard_comm_prefs_ph', L))
-					.onChange(v => { this.commPreferences = v; });
+				ta.setValue(this.commPreferences).setPlaceholder(t('wizard_comm_prefs_ph', L)).onChange(v => { this.commPreferences = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -278,9 +259,7 @@ export class SetupWizard extends Modal {
 			.setName(t('wizard_focus_name', L))
 			.setDesc(t('wizard_focus_desc', L))
 			.addTextArea(ta => {
-				ta.setValue(this.interests)
-					.setPlaceholder(t('wizard_focus_ph', L))
-					.onChange(v => { this.interests = v; });
+				ta.setValue(this.interests).setPlaceholder(t('wizard_focus_ph', L)).onChange(v => { this.interests = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -288,9 +267,7 @@ export class SetupWizard extends Modal {
 			.setName(t('wizard_long_term_goals_name', L))
 			.setDesc(t('wizard_long_term_goals_desc', L))
 			.addTextArea(ta => {
-				ta.setValue(this.longTermGoals)
-					.setPlaceholder(t('wizard_long_term_goals_ph', L))
-					.onChange(v => { this.longTermGoals = v; });
+				ta.setValue(this.longTermGoals).setPlaceholder(t('wizard_long_term_goals_ph', L)).onChange(v => { this.longTermGoals = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -298,9 +275,7 @@ export class SetupWizard extends Modal {
 			.setName(t('wizard_personal_context_name', L))
 			.setDesc(t('wizard_personal_context_desc', L))
 			.addTextArea(ta => {
-				ta.setValue(this.personalContext)
-					.setPlaceholder(t('wizard_personal_context_ph', L))
-					.onChange(v => { this.personalContext = v; });
+				ta.setValue(this.personalContext).setPlaceholder(t('wizard_personal_context_ph', L)).onChange(v => { this.personalContext = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -308,9 +283,7 @@ export class SetupWizard extends Modal {
 			.setName(t('wizard_patterns_to_avoid_name', L))
 			.setDesc(t('wizard_patterns_to_avoid_desc', L))
 			.addTextArea(ta => {
-				ta.setValue(this.patternsToAvoid)
-					.setPlaceholder(t('wizard_patterns_to_avoid_ph', L))
-					.onChange(v => { this.patternsToAvoid = v; });
+				ta.setValue(this.patternsToAvoid).setPlaceholder(t('wizard_patterns_to_avoid_ph', L)).onChange(v => { this.patternsToAvoid = v; });
 				ta.inputEl.rows = 3;
 			});
 
@@ -447,15 +420,12 @@ export class SetupWizard extends Modal {
 		}
 
 		if (onNext) {
-			const nextBtn = navEl.createEl('button', {
-				text: nextLabel,
-				cls: 'mod-cta',
-			});
+			const nextBtn = navEl.createEl('button', { text: nextLabel, cls: 'mod-cta' });
 			nextBtn.addEventListener('click', onNext);
 		}
 	}
 
-	// — Soul generation —
+	// — LLM generation —
 
 	private makeClient(): OpenRouterClient {
 		return new OpenRouterClient(this.apiKey, this.modelSlug || 'anthropic/claude-sonnet-4.6');
@@ -480,7 +450,6 @@ export class SetupWizard extends Modal {
 	}
 
 	private async generateUser(): Promise<{ body: string; usage: LLMUsage }> {
-
 		const userMessage = [
 			`Language: Write the entire document in ${this.language}.`,
 			'',
@@ -499,59 +468,33 @@ export class SetupWizard extends Modal {
 		return { body: content, usage };
 	}
 
-	// — Finish —
-
 	private userFallback(): string {
 		return [
-			'## Work style',
-			'',
-			this.workStyle || 'To be defined.',
-			'',
-			'## Communication preferences',
-			'',
-			this.commPreferences || 'To be defined.',
-			'',
-			'## Long-term goals',
-			'',
-			this.longTermGoals || 'To be defined.',
-			'',
-			'## Current areas of focus',
-			'',
-			this.interests || 'To be defined.',
-			'',
-			'## Patterns to avoid',
-			'',
-			this.patternsToAvoid || 'To be defined.',
-			'',
-			'## Relevant personal context',
-			'',
-			this.personalContext || 'To be defined.',
+			'## Work style', '', this.workStyle || 'To be defined.',
+			'', '## Communication preferences', '', this.commPreferences || 'To be defined.',
+			'', '## Long-term goals', '', this.longTermGoals || 'To be defined.',
+			'', '## Current areas of focus', '', this.interests || 'To be defined.',
+			'', '## Patterns to avoid', '', this.patternsToAvoid || 'To be defined.',
+			'', '## Relevant personal context', '', this.personalContext || 'To be defined.',
 		].join('\n');
 	}
 
+	// — Finish orchestration —
+
 	private async runFinish(): Promise<void> {
 		const s = this.soulFormState;
-		const soulFormHasContent = !!(
-			s.corePurpose.trim() ||
-			s.coreValues.trim() ||
-			s.voiceTone.trim()
-		);
+		const soulFormHasContent = !!(s.corePurpose.trim() || s.coreValues.trim() || s.voiceTone.trim());
 		const userFormHasContent = !!(
-			this.workStyle.trim() ||
-			this.commPreferences.trim() ||
-			this.interests.trim() ||
-			this.longTermGoals.trim() ||
-			this.personalContext.trim() ||
-			this.patternsToAvoid.trim()
+			this.workStyle.trim() || this.commPreferences.trim() || this.interests.trim() ||
+			this.longTermGoals.trim() || this.personalContext.trim() || this.patternsToAvoid.trim()
 		);
 
-		// Kick off pricing fetch concurrently — it must not block generation
 		const pricingPromise = this.plugin.getModelPricing().catch(() => null);
-
 		const L = this.language;
+
 		this.updateLoadingStatus(t('wizard_loading_user', L));
 		let userBody: string;
-		let userUsage: import('../types').LLMUsage | null = null;
+		let userUsage: LLMUsage | null = null;
 		try {
 			const result = userFormHasContent ? await this.generateUser() : null;
 			userBody = result?.body ?? this.userFallback();
@@ -565,7 +508,7 @@ export class SetupWizard extends Modal {
 		this.updateLoadingStatus(t('wizard_loading_soul', L));
 		let soulBody: string;
 		let soulPhrases: string[] = [];
-		let soulUsage: import('../types').LLMUsage | null = null;
+		let soulUsage: LLMUsage | null = null;
 		try {
 			const result = soulFormHasContent ? await this.generateSoul() : null;
 			const rawBody = result?.body ?? SOUL_FALLBACK;
@@ -581,7 +524,6 @@ export class SetupWizard extends Modal {
 
 		this.updateLoadingStatus(t('wizard_loading_files', L));
 
-		// Collect pricing (should be resolved by now; 3s safety timeout)
 		const pricing = await Promise.race([
 			pricingPromise,
 			new Promise<null>(resolve => window.setTimeout(() => resolve(null), 3000)),
@@ -595,95 +537,22 @@ export class SetupWizard extends Modal {
 		}
 
 		try {
-			const now = new Date();
-			const date = now.toISOString().slice(0, 10);
-			const datetime = now.toISOString().slice(0, 16);
-
 			const soulId = SoulManager.nameToId(s.name || 'Agent');
 			this.plugin.settings.apiKey = this.apiKey;
 			this.plugin.settings.modelSlug = this.modelSlug || 'anthropic/claude-sonnet-4.6';
 			this.plugin.settings.defaultSoul = soulId;
 			await this.plugin.saveSettings();
 
-			await this.vaultManager.ensurePath('_agent/souls');
-			await this.vaultManager.ensurePath('_agent/memory/episodes');
-			await this.vaultManager.ensurePath('_agent/memory/items');
-			await this.vaultManager.ensurePath('_system/traces');
-			await this.vaultManager.ensurePath('_system/memory_tiers');
-			await this.vaultManager.ensurePath('_system/memory_kinds');
-			await this.vaultManager.ensurePath('_system/states');
-			await this.vaultManager.ensurePath('_system/origins');
-			await this.vaultManager.ensurePath('_system/kinds');
-
-			// — Reference notes —
-			await this.createReferenceNotes();
-
-			// — .base files —
-			await this.createBaseFiles();
-
-			const soulFmLines = [
-				'---',
-				`name: "${s.name || 'Agent'}"`,
-				`emoji: ${s.emoji}`,
-				`kind: "${wrapLink('agent_soul')}"`,
-				`state: "${wrapLink('active')}"`,
-				`created_at: ${date}`,
-				`updated_at: ${date}`,
-				`origin: "${wrapLink('hybrid')}"`,
-			];
-			if (s.soulModelSlug) soulFmLines.push(`model_slug: ${s.soulModelSlug}`);
-			if (soulPhrases.length > 0) {
-				soulFmLines.push(`loading_phrases: [${soulPhrases.map(p => `"${p.replace(/"/g, '\\"')}"`).join(', ')}]`);
-			}
-			soulFmLines.push('---', '', soulBody);
-			await this.vaultManager.writeFile(`_agent/souls/${soulId}.md`, soulFmLines.join('\n'));
-
-			await this.vaultManager.writeFile('_agent/user.md', [
-				'---',
-				`kind: "${wrapLink('agent_user')}"`,
-				`state: "${wrapLink('active')}"`,
-				`created_at: ${date}`,
-				`updated_at: ${date}`,
-				`origin: "${wrapLink('hybrid')}"`,
-				'---',
-				'',
+			await initVault({
+				soulFormState: s,
+				soulBody,
+				soulPhrases,
 				userBody,
-			].join('\n'));
-
-			const activeTags = [...this.selectedTags].join('\n');
-			await this.vaultManager.writeFile('_agent/taxonomy.md', [
-				'---',
-				'kind: agent_taxonomy',
-				`updated_at: ${date}`,
-				'origin: human',
-				'---',
-				'',
-				'## Active topics',
-				'',
-				activeTags,
-				'',
-				'## Pending proposals',
-			].join('\n'));
-
-			await this.vaultManager.writeFile('_agent/memory/active.md', [
-				'---',
-				'kind: memory_active',
-				'state: current',
-				`created_at: ${date}`,
-				`updated_at: ${datetime}`,
-				'origin: hybrid',
-				'---',
-				'',
-				'## Current focus',
-				'',
-				'## Recent decisions',
-				'',
-				'## Blockers',
-				'',
-				'none',
-				'',
-				'## Next step',
-			].join('\n'));
+				selectedTags: this.selectedTags,
+				apiKey: this.apiKey,
+				modelSlug: this.modelSlug,
+				language: this.language,
+			}, this.vaultManager);
 
 			this.finishState = 'done';
 			this.render();
@@ -691,122 +560,6 @@ export class SetupWizard extends Modal {
 			this.finishError = e instanceof Error ? e.message : String(e);
 			this.finishState = 'error';
 			this.render();
-		}
-	}
-
-	private async createReferenceNotes(): Promise<void> {
-		const notes: [string, string][] = [
-			['_system/memory_tiers/working.md', '# Working\n\nMemory held in `active.md` for the current session or short-term focus.'],
-			['_system/memory_tiers/semantic.md', '# Semantic\n\nLong-term memory items indexed by score for context assembly.'],
-			['_system/memory_kinds/decision.md', '# Decision\n\nA choice made with intent, with lasting implications.'],
-			['_system/memory_kinds/insight.md', '# Insight\n\nA pattern or realization extracted from experience.'],
-			['_system/memory_kinds/constraint.md', '# Constraint\n\nA hard limit or boundary that shapes what is possible.'],
-			['_system/memory_kinds/risk.md', '# Risk\n\nAn open threat or uncertainty worth tracking.'],
-			['_system/memory_kinds/summary.md', '# Summary\n\nA compressed account of events or context.'],
-			['_system/memory_kinds/pattern.md', '# Pattern\n\nA recurring behavior, structure, or tendency worth naming.'],
-			['_system/states/pending.md', '# Pending\n\nExtracted by the agent, awaiting review. Not yet used in context.'],
-			['_system/states/active.md', '# Active\n\nConfirmed and eligible for context assembly.'],
-			['_system/states/stale.md', '# Stale\n\nExpired. No longer included in context.'],
-			['_system/states/archived.md', '# Archived\n\nManually retired. Kept for reference.'],
-			['_system/states/confirmed.md', '# Confirmed\n\nEpisode or item accepted as part of the permanent record.'],
-			['_system/origins/agent.md', '# Agent\n\nCreated by the agent from session content.'],
-			['_system/origins/human.md', '# Human\n\nCreated directly by the user.'],
-			['_system/origins/hybrid.md', '# Hybrid\n\nCreated collaboratively between user and agent.'],
-			['_system/kinds/memory_item.md', '# Memory Item\n\nA discrete piece of long-term memory.'],
-			['_system/kinds/memory_episode.md', '# Memory Episode\n\nA session summary with transcript and extracted candidates.'],
-			['_system/kinds/agent_soul.md', '# Agent Soul\n\nPersonality and identity definition for an agent.'],
-		];
-
-		for (const [path, content] of notes) {
-			if (!this.vaultManager.fileExists(path)) {
-				await this.vaultManager.writeFile(path, content);
-			}
-		}
-	}
-
-	private async createBaseFiles(): Promise<void> {
-		const bases: [string, string][] = [
-			['_agent/memory/episodes/_episodes.base', [
-				'views:',
-				'  - type: table',
-				'    name: Tabla',
-				'    filters:',
-				'      and:',
-				'        - file.inFolder("_agent/memory/episodes")',
-				'        - file.ext != "base"',
-				'    order:',
-				'      - file.name',
-				'      - kind',
-				'      - state',
-				'      - origin',
-				'      - session_id',
-				'      - soul',
-				'      - token_cost',
-				'      - created_at',
-				'      - updated_at',
-			].join('\n')],
-			['_agent/memory/items/_memory-items.base', [
-				'views:',
-				'  - type: table',
-				'    name: Tabla',
-				'    filters:',
-				'      and:',
-				'        - file.inFolder("_agent/memory/items")',
-				'        - file.ext != "base"',
-				'    order:',
-				'      - file.name',
-				'      - kind',
-				'      - state',
-				'      - created_at',
-				'      - updated_at',
-				'      - origin',
-				'      - memory_tier',
-				'      - memory_kind',
-				'      - importance',
-				'      - confidence',
-				'      - tags',
-				'      - expires_at',
-				'      - proposed_tags',
-				'      - related_to',
-				'      - session_id',
-				'      - soul',
-			].join('\n')],
-			['_agent/souls/_souls.base', [
-				'views:',
-				'  - type: table',
-				'    name: Tabla',
-				'    filters:',
-				'      and:',
-				'        - file.inFolder("_agent/souls")',
-				'        - file.ext != "base"',
-				'    order:',
-				'      - file.name',
-				'      - emoji',
-				'      - name',
-				'      - kind',
-				'      - loading_phrases',
-				'      - origin',
-				'      - created_at',
-				'      - updated_at',
-			].join('\n')],
-			['_system/traces/_traces.base', [
-				'views:',
-				'  - type: table',
-				'    name: Tabla',
-				'    filters:',
-				'      and:',
-				'        - file.inFolder("_system/traces")',
-				'        - file.ext != "base"',
-				'    order:',
-				'      - file.name',
-				'      - file.ctime',
-			].join('\n')],
-		];
-
-		for (const [path, content] of bases) {
-			if (!this.vaultManager.fileExists(path)) {
-				await this.vaultManager.writeFile(path, content);
-			}
 		}
 	}
 }

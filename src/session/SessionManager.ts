@@ -5,7 +5,7 @@ import type { TaxonomyManager } from '../vault/TaxonomyManager';
 import { MemoryExtractor } from '../memory/MemoryExtractor';
 import type { ChatMessage, MemoryItemCandidate } from '../types';
 import { countTokens } from '../utils/tokens';
-import { t } from '../utils/language';
+import { t } from '../i18n';
 import { wrapLink } from '../utils/links';
 
 export class SessionManager {

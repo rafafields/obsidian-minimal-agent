@@ -21,7 +21,7 @@ To test: copy `main.js`, `manifest.json`, and `styles.css` to `<Vault>/.obsidian
 
 ## Architecture
 
-The plugin is built around three core subsystems defined in `obsidian-agent-core-spec.md`:
+The plugin is built around three core subsystems defined in `docs/spec.md`:
 
 ### ContextAssembler
 Assembles the LLM context in three deterministic layers within a fixed token budget (default: 8000):
@@ -67,8 +67,17 @@ Sensitive config is in Obsidian's plugin settings UI: `apiKey`, `modelSlug`, `co
 - TypeScript with `"strict": true`.
 - The `memory_item` frontmatter schema is defined in spec §4.1 — all fields must conform exactly.
 - Commands use stable IDs (never rename after release). Settings persisted via `this.loadData()` / `this.saveData()`.
+- Every new feature must include Vitest tests for any pure logic it introduces (no I/O, no Obsidian API). Run `npm test` before marking a phase complete.
 
 ## Releasing
+
+Before producing a production build, always run tests first:
+
+```bash
+npm test && npm run build
+```
+
+To bump version and release:
 
 ```bash
 npm version patch   # bumps manifest.json, package.json, versions.json

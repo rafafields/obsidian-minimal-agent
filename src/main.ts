@@ -13,6 +13,7 @@ import { SessionManager } from './session/SessionManager';
 import { SoulManager } from './souls/SoulManager';
 import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
 import { SetupWizard } from './wizard/SetupWizard';
+import { LockIcons } from './ui/LockIcons';
 import type { MemoryItemFrontmatter } from './types';
 
 const CORE_FILES = [
@@ -32,8 +33,7 @@ export default class MinimalAgentPlugin extends Plugin {
 	soulManager: SoulManager;
 
 	private coreFileContents = new Map<string, string>();
-	private lockIconTimer: number | null = null;
-	private lockIconObserver: MutationObserver | null = null;
+	private lockIcons: LockIcons;
 	private statusBarTokenEl: HTMLElement;
 	private statusBarTimer: number | null = null;
 	private pricingCache = new Map<string, { pricing: ModelPricing; fetchedAt: number }>();
@@ -115,20 +115,15 @@ export default class MinimalAgentPlugin extends Plugin {
 			void this.memoryManager.autoMarkStale();
 			void this.cleanupTraces();
 			void this.cacheCoreFiles();
-			this.setupLockIcons();
+			this.lockIcons = new LockIcons(this.app, CORE_FILES);
+			this.lockIcons.setup();
 			this.updateStatusBarTokens();
 		});
 	}
 
 	onunload() {
 		if (this.statusBarTimer !== null) window.clearTimeout(this.statusBarTimer);
-		if (this.lockIconTimer !== null) window.clearTimeout(this.lockIconTimer);
-		if (this.lockIconObserver) {
-			this.lockIconObserver.disconnect();
-			this.lockIconObserver = null;
-		}
-		// Remove injected lock icons so they don't linger after plugin disable
-		document.querySelectorAll('.agent-lock-icon').forEach(el => el.remove());
+		this.lockIcons?.destroy();
 	}
 
 	async loadSettings() {
@@ -227,38 +222,6 @@ export default class MinimalAgentPlugin extends Plugin {
 		for (const path of CORE_FILES) {
 			const content = await this.vaultManager.readFile(path);
 			if (content !== null) this.coreFileContents.set(path, content);
-		}
-	}
-
-	// — File explorer lock icons —
-
-	private setupLockIcons(): void {
-		this.updateLockIcons();
-
-		const fileExplorer = this.app.workspace.getLeavesOfType('file-explorer')[0];
-		const containerEl = (fileExplorer?.view as { containerEl?: HTMLElement })?.containerEl;
-		if (containerEl) {
-			this.lockIconObserver = new MutationObserver(() => {
-				if (this.lockIconTimer !== null) window.clearTimeout(this.lockIconTimer);
-				this.lockIconTimer = window.setTimeout(() => {
-					this.lockIconTimer = null;
-					this.updateLockIcons();
-				}, 250);
-			});
-			this.lockIconObserver.observe(containerEl, { childList: true, subtree: true });
-		}
-	}
-
-	private updateLockIcons(): void {
-		const tooltip = 'Protected file — cannot be renamed or deleted while Minimal Agent is active.';
-		for (const corePath of CORE_FILES) {
-			const navEl = document.querySelector(`.nav-file-title[data-path="${corePath}"]`);
-			if (!navEl || navEl.querySelector('.agent-lock-icon')) continue;
-			const iconEl = document.createElement('span');
-			iconEl.className = 'agent-lock-icon';
-			iconEl.textContent = '🔒';
-			iconEl.setAttribute('title', tooltip);
-			navEl.insertBefore(iconEl, navEl.firstChild);
 		}
 	}
 

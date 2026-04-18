@@ -5,7 +5,7 @@ import { LLMError, type ChatMessage, type SoulMeta } from '../types';
 import { calcCost, countTokens, formatCost } from '../utils/tokens';
 import { createMascotImg, type MascotState } from './mascot';
 import { SoulGeneratorModal } from '../souls/SoulGeneratorModal';
-import { t } from '../utils/language';
+import { t } from '../i18n';
 import { LoadingScreen } from './LoadingScreen';
 import { LOADING_PHRASES } from './loadingPhrases';
 

@@ -31,6 +31,16 @@ export const CURATED_MODELS: CuratedModel[] = [
 		description: 'Ideal para usuarios multilingüe o contextos internacionales; buena coherencia en conversaciones largas.',
 	},
 	{
+		slug: 'anthropic/claude-haiku-4.5',
+		displayName: 'Claude Haiku 4.5',
+		provider: 'Anthropic',
+		inputPricePerM: 0.80,
+		outputPricePerM: 4.00,
+		tier: 'cheap',
+		zdr: true,
+		description: 'Ideal para uso frecuente con bajo coste; rápido y capaz para conversaciones cotidianas y extracción de memoria.',
+	},
+	{
 		slug: 'anthropic/claude-sonnet-4.6',
 		displayName: 'Claude Sonnet 4.6',
 		provider: 'Anthropic',

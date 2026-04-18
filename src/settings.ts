@@ -3,7 +3,7 @@ import type MinimalAgentPlugin from './main';
 import type { Importance } from './types';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from './llm/curatedModels';
 import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
-import { LANGUAGES, detectDefaultLanguage, t } from './utils/language';
+import { LANGUAGES, detectDefaultLanguage, t } from './i18n';
 
 export interface AgentSettings {
 	defaultSoul: string;

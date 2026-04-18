@@ -1,7 +1,7 @@
 import { Setting } from 'obsidian';
 import { EmojiPicker } from './EmojiPicker';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from '../llm/curatedModels';
-import { t } from '../utils/language';
+import { t } from '../i18n';
 
 export interface SoulFormState {
 	name: string;

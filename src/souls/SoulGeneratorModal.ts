@@ -7,7 +7,7 @@ import { createMascotImg } from '../ui/mascot';
 import { LoadingScreen } from '../ui/LoadingScreen';
 import { SoulForm, type SoulFormState } from '../ui/SoulForm';
 import { SoulManager } from './SoulManager';
-import { LANGUAGES, detectDefaultLanguage, t } from '../utils/language';
+import { LANGUAGES, detectDefaultLanguage, t } from '../i18n';
 import { wrapLink } from '../utils/links';
 import { Setting } from 'obsidian';
 
