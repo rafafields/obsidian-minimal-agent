@@ -10,7 +10,7 @@ All agent state — personality, configuration, memory — lives as human-readab
 - **Multiple souls** — create distinct agent personalities via the Soul Generator; each soul can pin its own model
 - **Long-term memory** — the agent extracts and remembers relevant information across sessions
 - **Full transparency** — every memory item, episode summary, and API trace is a readable file in `_agent/`
-- **Human review** — memory candidates go to `_pending/` for your approval before being confirmed
+- **Human review** — memory candidates are written with `state: pending` for your approval before being used in context
 - **Configurable context** — token budget, importance threshold, and episode history are all adjustable
 - **Multilingual** — response language is configurable per-installation
 
@@ -42,8 +42,7 @@ _agent/
     active.md            # Current working memory (updated each session)
     episodes/            # Session summaries — one .md file per session
       _episodes.base     # Obsidian Bases view for episodes
-    items/               # Confirmed memory items
-      _pending/          # Candidates awaiting your review
+    items/               # All memory items (pending + confirmed + archived)
       _memory-items.base # Obsidian Bases view for memory items
 _system/
   traces/                # Raw API call traces (auto-deleted per retention setting)
@@ -56,13 +55,13 @@ After you click **Finalize and memorize** (or the idle timer fires), the agent:
 
 1. Writes a session summary to `_agent/memory/episodes/YYYY-MM-DD-HH-MM.md`
 2. Sends the transcript to a second LLM call that extracts 0–5 memory candidates
-3. Writes candidates to `_agent/memory/items/_pending/`
+3. Writes candidates to `_agent/memory/items/` with `state: pending`
 
 To review candidates:
-- **Move** a file from `_pending/` to `_agent/memory/items/` → confirmed, used in future sessions
+- **Edit** a file and change `state: pending` to `state: active` → confirmed, used in future sessions
 - **Delete** a file → discarded, logged in `_system/traces/`
 
-The vault hooks watch these actions in real time — no manual steps beyond moving or deleting the file.
+The vault hooks watch these actions in real time — no manual steps beyond editing or deleting the file.
 
 ## LLM services
 
@@ -142,12 +141,12 @@ After `finalizeSession()` is triggered, `MemoryExtractor.extract()` sends a **se
         ▼
   JSON response → parse candidates[]
         │
-        ├─► write each candidate to _pending/ as .md (frontmatter + body)
+        ├─► write each candidate to items/ as .md with state: pending
         ├─► write episode summary to episodes/
         └─► write raw trace to _system/traces/
 ```
 
-The extraction call uses the same `modelSlug` as the chat session. Candidates are **never auto-confirmed** — they sit in `_pending/` until you act on them.
+The extraction call uses the same `modelSlug` as the chat session. Candidates are **never auto-confirmed** — they stay in `state: pending` until you act on them.
 
 ## Context scoring formula
 
