@@ -555,6 +555,7 @@ export class SetupWizard extends Modal {
 			}, this.vaultManager);
 
 			this.finishState = 'done';
+			this.plugin.openGettingStarted();
 			this.render();
 		} catch (e) {
 			this.finishError = e instanceof Error ? e.message : String(e);

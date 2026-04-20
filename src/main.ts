@@ -13,6 +13,7 @@ import { SessionManager } from './session/SessionManager';
 import { SoulManager } from './souls/SoulManager';
 import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
 import { SetupWizard } from './wizard/SetupWizard';
+import { refreshSystemDocs } from './wizard/WizardVaultInit';
 import { LockIcons } from './ui/LockIcons';
 import type { MemoryItemFrontmatter } from './types';
 
@@ -111,6 +112,8 @@ export default class MinimalAgentPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			if (SetupWizard.isFirstRun(this.app)) {
 				new SetupWizard(this.app, this, this.vaultManager).open();
+			} else if (!this.vaultManager.fileExists('_system/getting-started.md')) {
+				void refreshSystemDocs(this.vaultManager, this.settings.language);
 			}
 			void this.memoryManager.autoMarkStale();
 			void this.cleanupTraces();
@@ -139,6 +142,14 @@ export default class MinimalAgentPlugin extends Plugin {
 		if (leaf) {
 			leaf.setViewState({ type: CHAT_VIEW_TYPE, active: true });
 			this.app.workspace.revealLeaf(leaf);
+		}
+	}
+
+	openGettingStarted() {
+		const file = this.app.vault.getAbstractFileByPath('_system/getting-started.md');
+		if (file instanceof TFile) {
+			const leaf = this.app.workspace.getLeaf(false);
+			if (leaf) void leaf.openFile(file);
 		}
 	}
 
