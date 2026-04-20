@@ -221,6 +221,7 @@ export class ChatView extends ItemView {
 				episodeDaysBack: this.plugin.settings.episodeDaysBack,
 				minImportance: this.plugin.settings.minImportanceForContext,
 				soulId: this.activeSoulId,
+				additionalContextPaths: this.plugin.settings.additionalContextPaths,
 			});
 
 			const language = this.plugin.settings.language;

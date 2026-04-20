@@ -62,6 +62,17 @@ export class ContextAssembler {
 			);
 		}
 
+		// — Layer 1.5: Pinned (user-configured additional files) —
+		const bootstrapSet = new Set(bootstrapPaths);
+		for (const filePath of options.additionalContextPaths ?? []) {
+			if (bootstrapSet.has(filePath)) continue;
+			const content = await this.vaultManager.readFile(filePath);
+			if (!content) continue;
+			const tokens = countTokens(content);
+			blocks.push({ filePath, content, tokens, layer: 'pinned' });
+			totalTokens += tokens;
+		}
+
 		// — Layer 2: Episodic (up to EPISODIC_BUDGET tokens) —
 		let episodicTokens = 0;
 		const allEpisodes = this.vaultManager.listFiles('_agent/memory/episodes')

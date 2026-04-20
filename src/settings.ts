@@ -1,5 +1,6 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFile } from 'obsidian';
 import type MinimalAgentPlugin from './main';
+import { countTokens } from './utils/tokens';
 import type { Importance } from './types';
 import { CURATED_MODELS, CUSTOM_MODEL_OPTION, findCuratedModel } from './llm/curatedModels';
 import { SoulGeneratorModal } from './souls/SoulGeneratorModal';
@@ -17,6 +18,7 @@ export interface AgentSettings {
 	traceRetentionDays: number;
 	autoArchiveExpiredItems: boolean;
 	idleTimeoutMinutes: number;
+	additionalContextPaths: string[];
 }
 
 export const DEFAULT_SETTINGS: AgentSettings = {
@@ -31,7 +33,27 @@ export const DEFAULT_SETTINGS: AgentSettings = {
 	traceRetentionDays: 30,
 	autoArchiveExpiredItems: true,
 	idleTimeoutMinutes: 5,
+	additionalContextPaths: [],
 };
+
+class FileSuggest extends AbstractInputSuggest<TFile> {
+	getSuggestions(query: string): TFile[] {
+		const lower = query.toLowerCase();
+		return this.app.vault.getMarkdownFiles()
+			.filter(f => f.path.toLowerCase().includes(lower))
+			.sort((a, b) => a.path.localeCompare(b.path))
+			.slice(0, 20);
+	}
+
+	renderSuggestion(file: TFile, el: HTMLElement): void {
+		el.setText(file.path);
+	}
+
+	selectSuggestion(file: TFile, _evt: MouseEvent | KeyboardEvent): void {
+		this.setValue(file.path);
+		this.close();
+	}
+}
 
 export class AgentSettingTab extends PluginSettingTab {
 	plugin: MinimalAgentPlugin;
@@ -242,34 +264,135 @@ export class AgentSettingTab extends PluginSettingTab {
 					}
 				}));
 
+		// — Pinned context files —
+		new Setting(containerEl)
+			.setName(t('settings_pinned_name', L))
+			.setDesc(t('settings_pinned_desc', L));
+
+		const pinnedEl = containerEl.createDiv({ cls: 'agent-pinned-section' });
+
+		const pinnedInputRow = pinnedEl.createDiv({ cls: 'agent-pinned-input-row' });
+		const pinnedSearchInput = pinnedInputRow.createEl('input', {
+			type: 'text',
+			placeholder: t('settings_pinned_add_ph', L),
+			cls: 'agent-pinned-input',
+		});
+		new FileSuggest(this.app, pinnedSearchInput);
+		const pinnedAddBtn = pinnedInputRow.createEl('button', {
+			text: t('settings_pinned_add_btn', L),
+			cls: 'mod-cta agent-pinned-add-btn',
+		});
+
+		const pinnedListEl = pinnedEl.createDiv({ cls: 'agent-pinned-list' });
+
 		const ctxInfoEl = containerEl.createDiv({ cls: 'agent-ctx-info' });
 		ctxInfoEl.createSpan({ text: t('settings_ctx_calculating', L), cls: 'agent-ctx-info__text' });
 
-		void this.plugin.contextAssembler.assemble({
-			tokenBudget: this.plugin.settings.contextTokenBudget,
-			episodeDaysBack: this.plugin.settings.episodeDaysBack,
-			minImportance: this.plugin.settings.minImportanceForContext,
-			soulId: this.plugin.settings.defaultSoul || 'default',
-		}).then(result => {
-			const budget = this.plugin.settings.contextTokenBudget;
-			const used = result.totalTokens;
-			const pct = Math.round((used / budget) * 100);
-			const droppedStr = result.droppedItems > 0
-				? t('settings_ctx_dropped', L, { n: String(result.droppedItems), s: result.droppedItems !== 1 ? 's' : '' })
-				: '';
-			const label = t('settings_ctx_usage', L, {
-				used: used.toLocaleString(),
-				budget: budget.toLocaleString(),
-				pct: String(pct),
-				dropped: droppedStr,
-			});
+		// Forward declarations so closures can reference each other
+		let renderPinnedList: () => void;
+		let refreshCtxInfo: () => void;
 
+		refreshCtxInfo = () => {
 			ctxInfoEl.empty();
-			const span = ctxInfoEl.createSpan({ text: label, cls: 'agent-ctx-info__text' });
-			span.addClass(pct >= 100 ? 'agent-ctx-info--over' : pct >= 80 ? 'agent-ctx-info--warn' : 'agent-ctx-info--ok');
-		}).catch(() => {
-			ctxInfoEl.empty();
-			ctxInfoEl.createSpan({ text: t('settings_ctx_error', L), cls: 'agent-ctx-info__text agent-ctx-info--muted' });
+			ctxInfoEl.createSpan({ text: t('settings_ctx_calculating', L), cls: 'agent-ctx-info__text' });
+
+			void this.plugin.contextAssembler.assemble({
+				tokenBudget: this.plugin.settings.contextTokenBudget,
+				episodeDaysBack: this.plugin.settings.episodeDaysBack,
+				minImportance: this.plugin.settings.minImportanceForContext,
+				soulId: this.plugin.settings.defaultSoul || 'default',
+				additionalContextPaths: this.plugin.settings.additionalContextPaths,
+			}).then(result => {
+				const budget = this.plugin.settings.contextTokenBudget;
+				const used = result.totalTokens;
+				const pct = Math.round((used / budget) * 100);
+				const droppedStr = result.droppedItems > 0
+					? t('settings_ctx_dropped', L, { n: String(result.droppedItems), s: result.droppedItems !== 1 ? 's' : '' })
+					: '';
+				const label = t('settings_ctx_usage', L, {
+					used: used.toLocaleString(),
+					budget: budget.toLocaleString(),
+					pct: String(pct),
+					dropped: droppedStr,
+				});
+
+				ctxInfoEl.empty();
+				const span = ctxInfoEl.createSpan({ text: label, cls: 'agent-ctx-info__text' });
+				span.addClass(pct >= 100 ? 'agent-ctx-info--over' : pct >= 80 ? 'agent-ctx-info--warn' : 'agent-ctx-info--ok');
+
+				if (pct >= 80) {
+					const cheapModels = CURATED_MODELS
+						.filter(m => m.tier === 'cheap' && m.slug !== this.plugin.settings.modelSlug)
+						.map(m => m.displayName);
+					if (cheapModels.length > 0) {
+						ctxInfoEl.createDiv({
+							text: t('settings_ctx_budget_warn', L, { models: cheapModels.join(', ') }),
+							cls: 'agent-ctx-info__text agent-ctx-info--warn',
+						});
+					}
+				}
+			}).catch(() => {
+				ctxInfoEl.empty();
+				ctxInfoEl.createSpan({ text: t('settings_ctx_error', L), cls: 'agent-ctx-info__text agent-ctx-info--muted' });
+			});
+		};
+
+		renderPinnedList = () => {
+			pinnedListEl.empty();
+			const paths = this.plugin.settings.additionalContextPaths;
+			if (paths.length === 0) {
+				pinnedListEl.createEl('p', {
+					text: t('settings_pinned_empty', L),
+					cls: 'agent-pinned-empty',
+				});
+				return;
+			}
+			for (const path of paths) {
+				const itemEl = pinnedListEl.createDiv({ cls: 'agent-pinned-item' });
+				itemEl.createSpan({ text: path, cls: 'agent-pinned-item__path' });
+				const tokSpan = itemEl.createSpan({ text: '…', cls: 'agent-pinned-item__tokens' });
+				const removeBtn = itemEl.createEl('button', { text: '×', cls: 'agent-pinned-item__remove' });
+				removeBtn.addEventListener('click', async () => {
+					this.plugin.settings.additionalContextPaths =
+						this.plugin.settings.additionalContextPaths.filter(p => p !== path);
+					await this.plugin.saveSettings();
+					renderPinnedList();
+					refreshCtxInfo();
+				});
+				void this.plugin.vaultManager.readFile(path).then(content => {
+					if (!content) {
+						tokSpan.setText(t('settings_pinned_not_found', L));
+						tokSpan.addClass('agent-pinned-item__missing');
+						return;
+					}
+					tokSpan.setText(t('settings_pinned_tokens', L, { tokens: countTokens(content).toLocaleString() }));
+				});
+			}
+		};
+
+		renderPinnedList();
+		refreshCtxInfo();
+
+		pinnedAddBtn.addEventListener('click', async () => {
+			const path = pinnedSearchInput.value.trim();
+			if (!path) return;
+			if (!this.plugin.settings.additionalContextPaths.includes(path)) {
+				this.plugin.settings.additionalContextPaths = [
+					...this.plugin.settings.additionalContextPaths,
+					path,
+				];
+				await this.plugin.saveSettings();
+				renderPinnedList();
+				refreshCtxInfo();
+			}
+			pinnedSearchInput.value = '';
+		});
+
+		pinnedSearchInput.addEventListener('keydown', (e: KeyboardEvent) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				pinnedAddBtn.click();
+			}
 		});
 
 		new Setting(containerEl)

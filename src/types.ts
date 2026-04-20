@@ -13,7 +13,7 @@ export type MemoryKind = 'decision' | 'insight' | 'constraint' | 'risk' | 'summa
 export type Importance = 'low' | 'medium' | 'high' | 'critical';
 export type Confidence = 'low' | 'medium' | 'high';
 export type Origin = 'agent' | 'human' | 'hybrid';
-export type ContextLayer = 'bootstrap' | 'episodic' | 'semantic';
+export type ContextLayer = 'bootstrap' | 'pinned' | 'episodic' | 'semantic';
 
 export interface ChatMessage {
 	role: 'system' | 'user' | 'assistant';
@@ -53,6 +53,7 @@ export interface ContextAssemblerOptions {
 	episodeDaysBack: number;
 	minImportance: Importance;
 	soulId: string;
+	additionalContextPaths?: string[];
 }
 
 export interface MemoryItemFrontmatter {
